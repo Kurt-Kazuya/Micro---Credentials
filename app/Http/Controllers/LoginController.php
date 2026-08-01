@@ -7,61 +7,72 @@ use Illuminate\Support\Facades\Auth;
 
 class LoginController extends Controller
 {
-    /**
-     * Show the login form.
-     */
     public function show()
     {
         return view('login');
     }
 
-    /**
-     * Handle a login request.
-     */
     public function store(Request $request)
     {
-        // Validate the input
-        $credentials = $request->validate([
-            'email' => ['required', 'string', 'email'],
+        $request->validate([
+            'email' => ['required', 'string'],
             'password' => ['required', 'string'],
         ]);
 
-        // Attempt to authenticate
-        if (Auth::attempt($credentials, $request->boolean('remember'))) {
-            // Authentication passed
-            $request->session()->regenerate();
-            $user = Auth::user();
+        $loginValue = $request->input('email');
+        $credentials = ['password' => $request->input('password')];
 
-            if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'profile_completed') && ! $user->profile_completed) {
-                return redirect()->route('profile.complete')->with('info', 'Please complete your profile before continuing.');
-            }
-
-            // Role-based default redirect
-            $role = (int) ($user->role_id ?? 3);
-            $routeName = match ($role) {
-                1 => 'admin.dashboard',
-                2 => 'faculty.dashboard',
-                default => 'dashboard',
-            };
-
-            return redirect()->intended(route($routeName))->with('success', 'Welcome back!');
+        if (filter_var($loginValue, FILTER_VALIDATE_EMAIL)) {
+            $credentials['email'] = $loginValue;
+        } else {
+            $credentials['username'] = $loginValue;
         }
 
-        // Authentication failed
-        return back()->withErrors([
-            'email' => 'The provided credentials do not match our records.',
-        ])->onlyInput('email');
+        if (! Auth::attempt($credentials, $request->boolean('remember'))) {
+            return back()
+                ->withErrors(['email' => 'The provided credentials do not match our records.'])
+                ->onlyInput('email');
+        }
+
+        $request->session()->regenerate();
+
+        if ($profileData = session('profile_data', [])) {
+            $user = Auth::user();
+            foreach (['name', 'role', 'phone', 'location', 'about', 'date_of_birth', 'gender', 'education', 'bio', 'email', 'language', 'timezone', 'avatar_url'] as $field) {
+                if (array_key_exists($field, $profileData)) {
+                    $user->{$field} = $profileData[$field];
+                }
+            }
+            $user->profile_completed = true;
+            $user->save();
+            session()->forget('profile_data');
+        }
+
+        return redirect()->route($this->resolveDashboardRoute(Auth::user()));
     }
 
-    /**
-     * Handle a logout request.
-     */
+    protected function resolveDashboardRoute($user): string
+    {
+        $roleId = (int) ($user->role_id ?? 3);
+
+        if ($roleId === 1) {
+            return 'admin.dashboard';
+        }
+
+        if ($roleId === 2) {
+            return 'faculty.dashboard';
+        }
+
+        return ($user->profile_completed ?? false) ? 'dashboard' : 'profile.show';
+    }
+
     public function destroy(Request $request)
     {
         Auth::logout();
+
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
-        return redirect(route('login'))->with('success', 'You have been logged out.');
+        return redirect()->route('login');
     }
 }

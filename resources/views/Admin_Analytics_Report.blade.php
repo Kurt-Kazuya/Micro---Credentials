@@ -458,14 +458,12 @@
             <div class="card-hd">
                 <span class="card-title">Enrollment by Courses</span>
             </div>
-                <div id="enrollment-list">
-                @foreach ($enrollmentByCourse as $row)
-                <div class="chart-row" data-label="{{ $row->label }}" data-value="{{ $row->value }}" data-percent="{{ $row->percent }}">
-                    <div class="chart-lbl">{{ $row->label }} &ndash; <span class="val">{{ $row->value }}</span></div>
-                    <div class="bar-track"><div class="bar-fill" style="width: {{ $row->percent }}%"></div></div>
-                </div>
-                @endforeach
-                </div>
+            @foreach ($enrollmentByCourse as $row)
+            <div class="chart-row">
+                <div class="chart-lbl">{{ $row->label }} &ndash; {{ $row->value }}</div>
+                <div class="bar-track"><div class="bar-fill" style="width: {{ $row->percent }}%"></div></div>
+            </div>
+            @endforeach
         </div>
 
         {{-- Completion Rate --}}
@@ -473,14 +471,12 @@
             <div class="card-hd">
                 <span class="card-title">Completion Rate</span>
             </div>
-            <div id="completion-list">
             @foreach ($completionRate as $row)
-            <div class="chart-row" data-label="{{ $row->label }}" data-value="{{ $row->value }}" data-percent="{{ $row->percent }}">
-                <div class="chart-lbl">{{ $row->label }} &ndash; <span class="val">{{ $row->value }}%</span></div>
+            <div class="chart-row">
+                <div class="chart-lbl">{{ $row->label }} &ndash; {{ $row->value }}%</div>
                 <div class="bar-track"><div class="bar-fill" style="width: {{ $row->percent }}%"></div></div>
             </div>
             @endforeach
-            </div>
         </div>
     </div>
 
@@ -495,51 +491,6 @@
         if (!section || section.classList.contains('locked')) return;
         section.classList.toggle('open');
     }
-
-    // Realtime polling for admin report
-    async function fetchReport() {
-        try {
-            const res = await fetch('{{ route('admin.report.live') }}', { headers: { 'Accept': 'application/json' } });
-            if (!res.ok) return;
-            const data = await res.json();
-
-            // update stat cards
-            document.querySelectorAll('.stat-card')[0].querySelector('.stat-val').textContent = data.stats.total_students;
-            document.querySelectorAll('.stat-card')[1].querySelector('.stat-val').textContent = data.stats.badges_issued;
-            document.querySelectorAll('.stat-card')[2].querySelector('.stat-val').textContent = data.stats.faculty_total;
-            document.querySelectorAll('.stat-card')[3].querySelector('.stat-val').textContent = data.stats.course_score_avg + '%';
-
-            // update enrollment list
-            const enrollContainer = document.getElementById('enrollment-list');
-            if (enrollContainer) {
-                enrollContainer.innerHTML = '';
-                data.enrollmentByCourse.forEach(row => {
-                    const div = document.createElement('div');
-                    div.className = 'chart-row';
-                    div.innerHTML = `<div class="chart-lbl">${row.label} – <span class="val">${row.value}</span></div><div class="bar-track"><div class="bar-fill" style="width: ${row.percent}%"></div></div>`;
-                    enrollContainer.appendChild(div);
-                });
-            }
-
-            // update completion list
-            const compContainer = document.getElementById('completion-list');
-            if (compContainer) {
-                compContainer.innerHTML = '';
-                data.completionRate.forEach(row => {
-                    const div = document.createElement('div');
-                    div.className = 'chart-row';
-                    div.innerHTML = `<div class="chart-lbl">${row.label} – <span class="val">${row.value}%</span></div><div class="bar-track"><div class="bar-fill" style="width: ${row.percent}%"></div></div>`;
-                    compContainer.appendChild(div);
-                });
-            }
-        } catch (e) {
-            console.error('Failed to fetch report', e);
-        }
-    }
-
-    // initial fetch and poll every 5 seconds
-    fetchReport();
-    setInterval(fetchReport, 5000);
 </script>
 
 </body>

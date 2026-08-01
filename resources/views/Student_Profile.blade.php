@@ -508,30 +508,6 @@
                             <span class="value">{{ $user->bio }}</span>
                         </div>
                     @endif
-                    @if($user->age ?? null)
-                        <div class="detail-row">
-                            <span class="label">Age:</span>
-                            <span class="value">{{ $user->age }}</span>
-                        </div>
-                    @endif
-                    @if($user->school_enrolled ?? null)
-                        <div class="detail-row">
-                            <span class="label">School Enrolled:</span>
-                            <span class="value">{{ $user->school_enrolled }}</span>
-                        </div>
-                    @endif
-                    @if($user->hobby ?? null)
-                        <div class="detail-row">
-                            <span class="label">Hobby:</span>
-                            <span class="value">{{ $user->hobby }}</span>
-                        </div>
-                    @endif
-                    @if($user->address ?? null)
-                        <div class="detail-row">
-                            <span class="label">Address:</span>
-                            <span class="value">{{ $user->address }}</span>
-                        </div>
-                    @endif
                 </div>
 
                 {{-- Settings card --}}

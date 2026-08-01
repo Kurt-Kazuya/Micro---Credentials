@@ -60,7 +60,7 @@ class RegisterController extends Controller
         // Log the user in
         auth()->login($user);
 
-        // Redirect to profile completion page before allowing dashboard access
-        return redirect()->route('profile.complete')->with('success', 'Account created! Please complete your profile.');
+        // Redirect to dashboard
+        return redirect()->route('dashboard')->with('success', 'Registration successful! Welcome ' . $user->first_name . '!');
     }
 }

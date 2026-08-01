@@ -1,7 +1,6 @@
 <?php
 
-use App\Models\Course;
-use Illuminate\Support\Facades\Auth;
+use App\Http\Middleware\RoleBasedAccess;
 use Illuminate\Support\Facades\Route;
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -177,232 +176,11 @@ Route::get('/monitoring/live', function () {
     return response()->json(compact('stats', 'activity'));
 })->name('monitoring.live');
 
-// DB-backed monitoring endpoint (alternative route for live data)
-Route::get('/monitoring/live-db', function () {
-    $db = \Illuminate\Support\Facades\DB::connection();
-
-    $since = now()->subMinutes(10);
-    $activeUsers = (int) $db->table('analytics_events')->where('occurred_at', '>=', $since)->distinct('user_id')->count('user_id');
-
-    $eventsToday = (int) $db->table('analytics_events')->whereDate('occurred_at', now()->toDateString())->count();
-    $enrollmentsToday = (int) $db->table('enrollments')->whereDate('enrolled_at', now()->toDateString())->count();
-    $badgesToday = (int) $db->table('user_badges')->whereDate('earned_at', now()->toDateString())->count();
-
-    $stats = [
-        'active_users' => max(0, $activeUsers),
-        'events_today' => $eventsToday,
-        'enrollments_today' => $enrollmentsToday,
-        'badges_today' => $badgesToday,
-    ];
-
-    $rows = $db->table('analytics_events')
-        ->orderByDesc('occurred_at')
-        ->limit(8)
-        ->get();
-
-    $activity = $rows->map(function ($r) {
-        return [
-            'title' => $r->event_type,
-            'detail' => $r->metadata ? (is_string($r->metadata) ? $r->metadata : json_encode($r->metadata)) : '',
-            'time' => \Carbon\Carbon::parse($r->occurred_at)->diffForHumans(),
-            'type' => $r->event_type,
-        ];
-    })->toArray();
-
-    // Academy stats: aggregate events per month (last 12 months)
-    $academyRaw = $db->table('analytics_events')
-        ->selectRaw("DATE_FORMAT(occurred_at, '%b %e, %Y') as label, COUNT(*) as value, DATE_FORMAT(occurred_at, '%Y-%m') as ym")
-        ->where('occurred_at', '>=', now()->subMonths(12))
-        ->groupBy('ym')
-        ->orderBy('ym')
-        ->get();
-
-    $academyStats = $academyRaw->map(function ($r) {
-        return ['label' => $r->label, 'value' => (int) $r->value];
-    })->values()->toArray();
-
-    // Learner success: simple buckets from enrollments
-    $completed = (int) $db->table('enrollments')->where('is_completed', true)->count();
-    $half = (int) $db->table('enrollments')->whereBetween('progress_percent', [50, 99])->count();
-    $started = (int) $db->table('enrollments')->whereBetween('progress_percent', [1, 49])->count();
-
-    $learnerSuccess = [
-        ['label' => 'Completed', 'count' => $completed],
-        ['label' => 'Halfway', 'count' => $half],
-        ['label' => 'Started', 'count' => $started],
-    ];
-
-    return response()->json(compact('stats', 'activity', 'academyStats', 'learnerSuccess'));
-})->name('monitoring.live.db');
-
-// Server-Sent Events: stream live monitoring data (DB-backed)
-Route::get('/monitoring/stream', function () {
-    set_time_limit(0);
-    $headers = [
-        'Content-Type' => 'text/event-stream',
-        'Cache-Control' => 'no-cache',
-        'Connection' => 'keep-alive',
-    ];
-
-    return response()->stream(function () {
-        $db = \Illuminate\Support\Facades\DB::connection();
-
-        while (true) {
-            $since = now()->subMinutes(10);
-            $activeUsers = (int) $db->table('analytics_events')->where('occurred_at', '>=', $since)->distinct('user_id')->count('user_id');
-
-            $eventsToday = (int) $db->table('analytics_events')->whereDate('occurred_at', now()->toDateString())->count();
-            $enrollmentsToday = (int) $db->table('enrollments')->whereDate('enrolled_at', now()->toDateString())->count();
-            $badgesToday = (int) $db->table('user_badges')->whereDate('earned_at', now()->toDateString())->count();
-
-            $stats = [
-                'active_users' => max(0, $activeUsers),
-                'events_today' => $eventsToday,
-                'enrollments_today' => $enrollmentsToday,
-                'badges_today' => $badgesToday,
-            ];
-
-            $rows = $db->table('analytics_events')
-                ->orderByDesc('occurred_at')
-                ->limit(8)
-                ->get();
-
-            $activity = $rows->map(function ($r) {
-                return [
-                    'title' => $r->event_type,
-                    'detail' => $r->metadata ? (is_string($r->metadata) ? $r->metadata : json_encode($r->metadata)) : '',
-                    'time' => \Carbon\Carbon::parse($r->occurred_at)->diffForHumans(),
-                    'type' => $r->event_type,
-                ];
-            })->toArray();
-
-            // Pre-render academy SVG (reuse same geometry as blade)
-            $academyRaw = $db->table('analytics_events')
-                ->selectRaw("DATE_FORMAT(occurred_at, '%b %e, %Y') as label, COUNT(*) as value, DATE_FORMAT(occurred_at, '%Y-%m') as ym")
-                ->where('occurred_at', '>=', now()->subMonths(12))
-                ->groupBy('ym')
-                ->orderBy('ym')
-                ->get();
-
-            $academyStats = $academyRaw->map(function ($r) {
-                return ['label' => $r->label, 'value' => (int) $r->value];
-            })->values()->toArray();
-
-            // build simple svg fragment
-            $W = 720; $H = 260; $padL = 40; $padR = 30; $padT = 34; $padB = 44;
-            $plotW = $W - $padL - $padR; $plotH = $H - $padT - $padB;
-            $maxV = max(30, (int) ceil((collect($academyStats)->max('value') ?? 0) / 10) * 10);
-            $n = max(count($academyStats) - 1, 1);
-            $coords = [];
-            foreach ($academyStats as $i => $p) {
-                $val = $p['value'] ?? 0;
-                $label = $p['label'] ?? '';
-                $coords[] = [
-                    'x' => $padL + ($plotW * $i / $n),
-                    'y' => $padT + $plotH - ($plotH * ($val) / $maxV),
-                    'label' => $label,
-                    'value' => $val,
-                ];
-            }
-
-            $lineParts = array_map(fn($c) => round($c['x'],1).','.round($c['y'],1), $coords);
-            $lineStr = implode(' ', $lineParts);
-            $areaStr = $lineStr.' '.round($padL + $plotW, 1).','.($padT + $plotH).' '.$padL.','.($padT + $plotH);
-
-            $svg = '<svg viewBox="0 0 '. $W .' '. $H .'" xmlns="http://www.w3.org/2000/svg">';
-            // gridlines
-            for ($v=0;$v<=$maxV;$v+=10) {
-                $gy = $padT + $plotH - ($plotH * $v / $maxV);
-                $svg .= "<line x1='{$padL}' y1='{$gy}' x2='".($padL+$plotW)."' y2='{$gy}' stroke='#e5e7eb' stroke-width='1'/>";
-            }
-            $svg .= "<polygon points='{$areaStr}' fill='#13176b' opacity='0.12'/>";
-            $svg .= "<polyline points='{$lineStr}' fill='none' stroke='#13176b' stroke-width='2.5' stroke-linejoin='round' stroke-linecap='round'/>";
-            foreach ($coords as $c) {
-                $svg .= "<circle cx='".round($c['x'],1)."' cy='".round($c['y'],1)."' r='3.5' fill='#fff' stroke='#13176b' stroke-width='2'/>";
-            }
-            $svg .= '</svg>';
-
-            $payload = json_encode([ 'stats' => $stats, 'activity' => $activity, 'academySvg' => $svg ]);
-
-            echo "data: {$payload}\n\n";
-            @ob_flush(); flush();
-
-            sleep(3);
-        }
-    }, 200, $headers);
-})->name('monitoring.stream');
-
-// Student analytics live endpoint (per-user when authenticated)
-Route::get('/analytics/live', function (\Illuminate\Http\Request $request) {
-    $db = \Illuminate\Support\Facades\DB::connection();
-    $userId = \Illuminate\Support\Facades\Auth::id() ?: (int) $request->input('user_id');
-
-    if (! $userId) {
-        // fallback to overall metrics
-        $activeCourses = $db->table('enrollments')->where('is_completed', false)->count();
-        $badgesEarned = $db->table('user_badges')->count();
-        $scoreAvg = $db->table('quiz_attempts')->avg('score') ?: 0;
-        $hoursEnrolled = (int) ($db->table('enrollments')->sum('progress_percent') / 100 * 10);
-    } else {
-        $activeCourses = $db->table('enrollments')->where('user_id', $userId)->where('is_completed', false)->count();
-        $badgesEarned = $db->table('user_badges')->where('user_id', $userId)->count();
-        $scoreAvg = $db->table('quiz_attempts')->where('user_id', $userId)->avg('score') ?: 0;
-        $hoursEnrolled = (int) ($db->table('enrollments')->where('user_id', $userId)->sum('progress_percent') / 100 * 10);
-    }
-
-    return response()->json([
-        'stats' => [
-            'active_courses' => (int) $activeCourses,
-            'badges_earned' => (int) $badgesEarned,
-            'score_avg' => round($scoreAvg, 2),
-            'hours_enrolled' => (int) $hoursEnrolled,
-        ],
-    ]);
-})->name('analytics.live');
-
-// Server-Sent Events: stream per-user analytics (student)
-Route::get('/analytics/stream', function (\Illuminate\Http\Request $request) {
-    set_time_limit(0);
-    $headers = [
-        'Content-Type' => 'text/event-stream',
-        'Cache-Control' => 'no-cache',
-        'Connection' => 'keep-alive',
-    ];
-
-    return response()->stream(function () use ($request) {
-        $db = \Illuminate\Support\Facades\DB::connection();
-        $userId = \Illuminate\Support\Facades\Auth::id() ?: (int) $request->input('user_id');
-
-        while (true) {
-            if (! $userId) {
-                $activeCourses = $db->table('enrollments')->where('is_completed', false)->count();
-                $badgesEarned = $db->table('user_badges')->count();
-                $scoreAvg = $db->table('quiz_attempts')->avg('score') ?: 0;
-                $hoursEnrolled = (int) ($db->table('enrollments')->sum('progress_percent') / 100 * 10);
-            } else {
-                $activeCourses = $db->table('enrollments')->where('user_id', $userId)->where('is_completed', false)->count();
-                $badgesEarned = $db->table('user_badges')->where('user_id', $userId)->count();
-                $scoreAvg = $db->table('quiz_attempts')->where('user_id', $userId)->avg('score') ?: 0;
-                $hoursEnrolled = (int) ($db->table('enrollments')->where('user_id', $userId)->sum('progress_percent') / 100 * 10);
-            }
-
-            $payload = json_encode(['stats' => [
-                'active_courses' => (int) $activeCourses,
-                'badges_earned' => (int) $badgesEarned,
-                'score_avg' => round($scoreAvg, 2),
-                'hours_enrolled' => (int) $hoursEnrolled,
-            ]]);
-
-            echo "data: {$payload}\n\n";
-            @ob_flush(); flush();
-            sleep(5);
-        }
-    }, 200, $headers);
-})->name('analytics.stream');
-
-// ═════════════════════════════════════════════════════════════════════════=
+// ══════════════════════════════════════════════════════════════════════════
 // ADMIN ROUTES
 // ══════════════════════════════════════════════════════════════════════════
+
+Route::middleware(RoleBasedAccess::class.':admin')->group(function () {
 
 // Admin Main Dashboard — accessible at /Admin-dashboard
 Route::get('/Admin-dashboard', function () {
@@ -545,41 +323,15 @@ Route::post('/Admin-usermanagement/users', function (\Illuminate\Http\Request $r
 // Card fields: id, title, students, faculty, badge, percent, selected
 // ══════════════════════════════════════════════════════════════════════════
 Route::get('/Admin-courses', function () {
-    $courses = Course::query()
-        ->orderByDesc('created_at')
-        ->get()
-        ->map(function (Course $course) {
-            return (object) [
-                'id' => $course->id,
-                'title' => $course->title,
-                'students' => $course->enrolled_count ?? 0,
-                'faculty' => $course->submitted_by ? 1 : 0,
-                'badge' => $course->category ? strtoupper(substr($course->category, 0, 2)) : '—',
-                'percent' => $course->is_published ? 100 : 0,
-                'status' => ucfirst($course->status ?? ($course->is_published ? 'Approved' : 'Pending')),
-            ];
-        });
-
     return view('Admin_Management_Course_&_Badges', [
-        'courses' => $courses,
+        'courses' => collect([
+            (object) ['id' => 1, 'title' => 'Introduction to Artificial Intelligence', 'students' => 48, 'faculty' => 4, 'badge' => 'AI Pioneer', 'percent' => 84],
+            (object) ['id' => 2, 'title' => 'Database Fundamentals',                    'students' => 48, 'faculty' => 4, 'badge' => 'AI Pioneer', 'percent' => 91],
+            (object) ['id' => 3, 'title' => 'Web Development',                           'students' => 48, 'faculty' => 4, 'badge' => 'AI Pioneer', 'percent' => 84],
+            (object) ['id' => 4, 'title' => 'Machine Learning Essentials',              'students' => 48, 'faculty' => 4, 'badge' => 'AI Pioneer', 'percent' => 91],
+        ]),
     ]);
 })->name('admin.courses');
-
-// Admin: approve a faculty-submitted course
-Route::post('/Admin-courses/{id}/approve', function ($id) {
-    $course = Course::find($id);
-
-    if (! $course) {
-        return redirect()->route('admin.courses')->with('error', 'Course not found.');
-    }
-
-    $course->status = 'approved';
-    $course->is_published = true;
-    $course->approved_at = now();
-    $course->save();
-
-    return redirect()->route('admin.courses')->with('success', 'Course approved successfully.');
-})->name('admin.courses.approve');
 
 // ══════════════════════════════════════════════════════════════════════════
 // Admin › Analytics › Report  —  standalone admin analytics page
@@ -589,13 +341,15 @@ Route::post('/Admin-courses/{id}/approve', function ($id) {
 // View: resources/views/Admin_Analytics_Report.blade.php
 // ══════════════════════════════════════════════════════════════════════════
 Route::get('/Admin-report', function () {
+    $stats = [
+        'total_students' => (int) \App\Models\User::query()->where('role_id', 3)->count(),
+        'badges_issued' => (int) \Illuminate\Support\Facades\DB::table('user_badges')->count(),
+        'faculty_total' => (int) \App\Models\User::query()->where('role_id', 2)->count(),
+        'course_score_avg' => round((float) \Illuminate\Support\Facades\DB::table('courses')->avg('passing_score'), 2),
+    ];
+
     return view('Admin_Analytics_Report', [
-        'stats' => [
-            'total_students'   => 402,
-            'badges_issued'    => 217,
-            'faculty_total'    => 17,
-            'course_score_avg' => 99.88,
-        ],
+        'stats' => $stats,
         // enrollment: bar width is value ÷ highest value (63) × 100
         'enrollmentByCourse' => collect([
             (object) ['label' => 'Database Fund', 'value' => 63, 'percent' => 100],
@@ -613,66 +367,7 @@ Route::get('/Admin-report', function () {
     ]);
 })->name('admin.report');
 
-// Admin report live JSON endpoint for realtime updates
-Route::get('/Admin-report/live', function () {
-    $db = \Illuminate\Support\Facades\DB::connection();
-
-    // Total students: users with role 'Student' if roles table exists, else total users
-    $studentRoleId = $db->table('roles')->where('name', 'Student')->value('id');
-    $facultyRoleId = $db->table('roles')->where('name', 'Faculty')->value('id');
-
-    $totalStudents = $studentRoleId ? $db->table('users')->where('role_id', $studentRoleId)->count() : $db->table('users')->count();
-    $facultyTotal = $facultyRoleId ? $db->table('users')->where('role_id', $facultyRoleId)->count() : $db->table('users')->whereNotNull('role_id')->count();
-
-    $badgesIssued = $db->table('user_badges')->count();
-
-    // Average quiz/assessment score (prefer quiz_attempts then assessments)
-    $avgQuiz = $db->table('quiz_attempts')->avg('score');
-    $avgAssessment = $db->table('assessments')->avg('score');
-    $courseScoreAvg = $avgQuiz ?? $avgAssessment ?? 0;
-    $courseScoreAvg = $courseScoreAvg ? round($courseScoreAvg, 2) : 0;
-
-    // Enrollment by course (label + count)
-    $courses = $db->table('courses')->select('id', 'title')->get();
-    $enrollments = $db->table('enrollments')
-        ->select('course_id', \Illuminate\Support\Facades\DB::raw('count(*) as value'))
-        ->groupBy('course_id')
-        ->pluck('value', 'course_id');
-
-    $enrollmentByCourse = [];
-    $max = 1;
-    foreach ($courses as $c) {
-        $value = (int) ($enrollments[$c->id] ?? 0);
-        $max = max($max, $value);
-        $enrollmentByCourse[] = ['label' => $c->title, 'value' => $value, 'percent' => 0];
-    }
-    // compute percent relative to max
-    foreach ($enrollmentByCourse as &$row) {
-        $row['percent'] = $max > 0 ? round(($row['value'] / $max) * 100) : 0;
-    }
-
-    // Completion rate per course = completed enrollments / total enrollments * 100
-    $completionRate = [];
-    foreach ($courses as $c) {
-        $total = (int) ($enrollments[$c->id] ?? 0);
-        $completed = $db->table('enrollments')->where('course_id', $c->id)->where('is_completed', true)->count();
-        $percent = $total > 0 ? round(($completed / $total) * 100) : 0;
-        $completionRate[] = ['label' => $c->title, 'value' => $percent, 'percent' => $percent];
-    }
-
-    $data = [
-        'stats' => [
-            'total_students'   => $totalStudents,
-            'badges_issued'    => $badgesIssued,
-            'faculty_total'    => $facultyTotal,
-            'course_score_avg' => $courseScoreAvg,
-        ],
-        'enrollmentByCourse' => $enrollmentByCourse,
-        'completionRate' => $completionRate,
-    ];
-
-    return response()->json($data);
-})->name('admin.report.live');
+});
 
 // --- TEMPORARY stubs (remove once real routes exist) ---
 foreach ([
@@ -686,19 +381,12 @@ foreach ([
 }
 
 // Student "Courses" convenience route → student Browse Courses (student side only)
+Route::middleware(RoleBasedAccess::class.':student')->group(function () {
 Route::get('/courses', fn() => redirect()->route('courses.browse'))->name('courses.index');
 
 Route::get('/preview-dashboard', function () {
-    $profile = session('profile_data', []);
-    $required = ['name', 'gender', 'date_of_birth', 'age', 'phone', 'school_enrolled', 'address', 'email'];
-    foreach ($required as $field) {
-        if (empty($profile[$field] ?? null)) {
-            return redirect()->route('profile.complete');
-        }
-    }
-
     return view('Student_dashboard', [
-        'user' => (object) ['name' => $profile['name'] ?? 'Ana'],
+        'user' => (object) ['name' => 'Ana'],
         'stats' => [
             'active_courses' => 2,
             'completed'      => 1,
@@ -714,76 +402,26 @@ Route::get('/preview-dashboard', function () {
     ]);
 })->name('dashboard');
 
-Route::get('/profile/complete', function () {
-    $user = auth()->user() ?: (object) array_merge(['name' => '', 'email' => ''], session('profile_data', []));
-
-    return view('Student_Profile_Completion', [
-        'user' => $user,
-    ]);
-})->name('profile.complete');
-
-Route::post('/profile/complete', function (\Illuminate\Http\Request $request) {
-    $validated = $request->validate([
-        'name' => ['required', 'string', 'max:255'],
-        'gender' => ['required', 'string', 'max:30'],
-        'date_of_birth' => ['required', 'date'],
-        'age' => ['required', 'integer', 'min:10', 'max:120'],
-        'phone' => ['required', 'string', 'max:40'],
-        'school_enrolled' => ['required', 'string', 'max:255'],
-        'hobby' => ['nullable', 'string', 'max:255'],
-        'address' => ['required', 'string', 'max:255'],
-        'email' => ['required', 'email', 'max:255'],
-        'bio' => ['nullable', 'string', 'max:600'],
-    ]);
-
-    $existing = session('profile_data', []);
-    $updated = array_merge($existing, $validated);
-    session(['profile_data' => $updated]);
-    // If user is authenticated, persist to DB as well
-    if (\Illuminate\Support\Facades\Auth::check()) {
-        $user = \Illuminate\Support\Facades\Auth::user();
-
-        if (array_key_exists('name', $updated)) {
-            $user->first_name = $updated['name'];
-        }
-        foreach (['gender','date_of_birth','age','phone','school_enrolled','hobby','address','email','bio','location'] as $k) {
-            if (array_key_exists($k, $updated)) {
-                $user->{$k} = $updated[$k];
-            }
-        }
-
-        $user->save();
-
-        // mark profile completed flag if available
-        if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'profile_completed')) {
-            $user->profile_completed = true;
-            $user->save();
-        }
-    }
-
-    $user = Auth::check() ? Auth::user() : null;
-    $role = (int) ($user->role_id ?? 3);
-    $routeName = match ($role) {
-        1 => 'admin.dashboard',
-        2 => 'faculty.dashboard',
-        default => 'dashboard',
-    };
-
-    return redirect()->route($routeName)->with('success', 'Profile completed successfully.');
-})->name('profile.complete.store');
-
 // --- Browse Courses ---
 Route::get('/courses/browse', function () {
-    $courses = Course::query()
-        ->where(function ($query) {
-            $query->where('status', 'approved')->orWhere('is_published', true);
-        })
-        ->orderByDesc('created_at')
-        ->get();
-
     return view('Student_browse_Courses', [
         'user' => (object) ['name' => 'Ana'],
-        'courses' => $courses,
+        'courses' => collect([
+            (object) [
+                'id' => 1, 'title' => 'Full - Stack Web Development with Laravel',
+                'description'   => 'Master modern web development using Laravel framework, MySQL and Blade templating. Build real-world applications from scratch.',
+                'category'      => 'Web Development', 'level' => 'Intermediate',
+                'instructor'    => 'Prof. Juan Dela Cruz', 'duration' => '40h',
+                'lessons_count' => 4, 'thumbnail_url' => null,
+            ],
+            (object) [
+                'id' => 2, 'title' => 'Computer Networking Fundamentals',
+                'description'   => 'Master modern web development using Laravel framework, MySQL and Blade templating. Build real-world applications from scratch.',
+                'category'      => 'Web Development', 'level' => 'Intermediate',
+                'instructor'    => 'Prof. Juan Dela Cruz', 'duration' => '40h',
+                'lessons_count' => 4, 'thumbnail_url' => null,
+            ],
+        ]),
         'categories' => ['Web Development', 'Networking'],
         'levels'     => ['Beginner', 'Intermediate', 'Advanced'],
         'filters'    => ['q' => null, 'category' => null, 'level' => null],
@@ -1045,6 +683,27 @@ Route::patch('/profile', function (\Illuminate\Http\Request $request) {
     // Persist the full updated profile to session
     session(['profile_data' => $updated]);
 
+    // If the user is authenticated, persist these fields to their user record
+    if (\Illuminate\Support\Facades\Auth::check()) {
+        $user = \Illuminate\Support\Facades\Auth::user();
+        if (array_key_exists('name', $updated)) {
+            $user->first_name = $updated['name'];
+        }
+        foreach (['gender','date_of_birth','age','phone','school_enrolled','hobby','address','email','bio','location'] as $k) {
+            if (array_key_exists($k, $updated)) {
+                $user->{$k} = $updated[$k];
+            }
+        }
+        // mark profile completed flag if available
+        if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'profile_completed')) {
+            $user->profile_completed = true;
+        }
+        $user->save();
+
+        // Clear session-stored profile data now that it's persisted
+        session()->forget('profile_data');
+    }
+
     return redirect()->route('profile.show')->with('success', 'Profile updated successfully!');
 
     // ── TODO (when DB is ready) ────────────────────────────────────────────
@@ -1121,9 +780,13 @@ Route::get('/analytics', function () {
         ]),
     ]);
 })->name('analytics.index');
+
+});
 // ══════════════════════════════════════════════════════════════════════════
 // FACULTY ROUTES
 // ══════════════════════════════════════════════════════════════════════════
+
+Route::middleware(RoleBasedAccess::class.':faculty')->group(function () {
 
 // Faculty Dashboard — accessible at /Faculty-dashboard
 // ⚠ STANDALONE PAGE: not connected to any other page or route.
@@ -1412,25 +1075,9 @@ if (! function_exists('facultyAllCourses')) {
     function facultyAllCourses(): array
     {
         $all = facultyDummyCourses();
-
-        foreach (Course::query()->orderByDesc('created_at')->get() as $course) {
-            $all[$course->id] = (object) [
-                'id' => $course->id,
-                'title' => $course->title,
-                'description' => $course->description,
-                'status' => ucfirst($course->status ?? ($course->is_published ? 'Approved' : 'Pending')),
-                'level' => $course->level ?? 'Beginner',
-                'students_count' => $course->enrolled_count ?? 0,
-                'modules_count' => 0,
-                'lessons_count' => $course->lessons_count ?? 0,
-                'thumbnail_url' => $course->thumbnail_url,
-            ];
-        }
-
         foreach (session('faculty_courses', []) as $id => $data) {
             $all[$id] = (object) $data;
         }
-
         return $all;
     }
 }
@@ -1612,29 +1259,43 @@ Route::get('/Faculty-createcourse', function () {
     ]);
 })->name('faculty.create');
 
-// ✅ Handle the Create Courses form — saves the course as pending review
-//    and redirects to the Managing Course screen for the newly created course.
+// ✅ Handle the Create Courses form — persists to session until the DB
+//    is wired up, then redirects to the Managing Course screen for the
+//    newly created course (shown with its empty state: 0 Students,
+//    0 Modules, "No Students enrolled yet", "No Modules yet").
 Route::post('/Faculty-createcourse', function (\Illuminate\Http\Request $request) {
-    $title = trim($request->input('title', '')) ?: 'Untitled Course';
-    $status = $request->input('status') === 'draft' ? 'draft' : 'pending';
-    $slug = \Illuminate\Support\Str::slug($title) ?: 'course';
+    $created = session('faculty_courses', []);
 
-    $course = Course::create([
-        'title' => $title,
-        'slug' => $slug . '-' . time(),
-        'description' => trim($request->input('description', '')),
-        'category' => $request->input('category'),
-        'level' => $request->input('level') ?: 'Beginner',
-        'duration' => $request->input('duration'),
-        'instructor' => Auth::check() ? trim(Auth::user()->first_name . ' ' . Auth::user()->last_name) : 'Faculty',
-        'passing_score' => (int) ($request->input('passing_score') ?: 75),
-        'is_featured' => false,
-        'is_published' => false,
-        'status' => $status,
-        'submitted_by' => Auth::id(),
-    ]);
+    // New ids start at 100 so they never clash with the dummy seed (1-5)
+    $newId = empty($created) ? 100 : (max(array_keys($created)) + 1);
 
-    return redirect()->route('faculty.courses.manage', $course->id);
+    // "Submit for approval" → Pending · "Draft" → Draft
+    $status = $request->input('status') === 'draft' ? 'Draft' : 'Pending';
+
+    $created[$newId] = [
+        'id'             => $newId,
+        'title'          => trim($request->input('title', '')) ?: 'Untitled Course',
+        'description'    => trim($request->input('description', '')),
+        'status'         => $status,
+        'level'          => $request->input('level') ?: 'Beginner',
+        'category'       => $request->input('category'),
+        'program'        => $request->input('program'),
+        'term'           => $request->input('term'),
+        'duration'       => $request->input('duration'),
+        'passing_score'  => $request->input('passing_score'),
+        'students_count' => 0,
+        'modules_count'  => 0,
+        'lessons_count'  => 0,
+        'thumbnail_url'  => null,
+    ];
+
+    session(['faculty_courses' => $created]);
+
+    return redirect()->route('faculty.courses.manage', $newId);
+
+    // ── TODO (when DB is ready) ────────────────────────────────────────
+    // Replace the session logic above with a Course::create([...]) call
+    // and redirect to the manage route with the new model's id.
 })->name('faculty.create.store');
 
 // ✅ Handle the "+ Add Modules" form on the Managing Course screen —
@@ -1844,6 +1505,8 @@ Route::post('/Faculty-mycourses/manage/{id}/modules/{key}/delete', function ($id
     // Replace the session logic above with Module::destroy($moduleId),
     // cascading to its lessons and quiz.
 })->name('faculty.module.delete');
+
+});
 
 // Faculty › Add Quiz builder — /Faculty-mycourses/manage/{id}/modules/{moduleIndex}/quiz/create
 // Shown when a module's "Add Quiz" button is clicked. Renders the SAME

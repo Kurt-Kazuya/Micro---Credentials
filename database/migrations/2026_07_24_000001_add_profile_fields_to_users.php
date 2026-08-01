@@ -13,28 +13,28 @@ return new class extends Migration
     {
         Schema::table('users', function (Blueprint $table) {
             if (! Schema::hasColumn('users', 'date_of_birth')) {
-                $table->date('date_of_birth')->nullable()->after('location');
-            }
-            if (! Schema::hasColumn('users', 'age')) {
-                $table->integer('age')->nullable()->after('date_of_birth');
-            }
-            if (! Schema::hasColumn('users', 'school_enrolled')) {
-                $table->string('school_enrolled')->nullable()->after('age');
-            }
-            if (! Schema::hasColumn('users', 'hobby')) {
-                $table->string('hobby')->nullable()->after('school_enrolled');
-            }
-            if (! Schema::hasColumn('users', 'address')) {
-                $table->string('address')->nullable()->after('hobby');
-            }
-            if (! Schema::hasColumn('users', 'bio')) {
-                $table->text('bio')->nullable()->after('address');
+                $table->string('date_of_birth')->nullable()->after('avatar_url');
             }
             if (! Schema::hasColumn('users', 'gender')) {
-                $table->string('gender')->nullable()->after('suffix');
+                $table->string('gender')->nullable()->after('date_of_birth');
+            }
+            if (! Schema::hasColumn('users', 'education')) {
+                $table->string('education')->nullable()->after('gender');
+            }
+            if (! Schema::hasColumn('users', 'about')) {
+                $table->text('about')->nullable()->after('education');
+            }
+            if (! Schema::hasColumn('users', 'bio')) {
+                $table->text('bio')->nullable()->after('about');
+            }
+            if (! Schema::hasColumn('users', 'language')) {
+                $table->string('language')->nullable()->after('bio');
+            }
+            if (! Schema::hasColumn('users', 'timezone')) {
+                $table->string('timezone')->nullable()->after('language');
             }
             if (! Schema::hasColumn('users', 'profile_completed')) {
-                $table->boolean('profile_completed')->default(false)->after('bio');
+                $table->boolean('profile_completed')->default(false)->after('timezone');
             }
         });
     }
@@ -45,29 +45,10 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            if (Schema::hasColumn('users', 'profile_completed')) {
-                $table->dropColumn('profile_completed');
-            }
-            if (Schema::hasColumn('users', 'gender')) {
-                $table->dropColumn('gender');
-            }
-            if (Schema::hasColumn('users', 'bio')) {
-                $table->dropColumn('bio');
-            }
-            if (Schema::hasColumn('users', 'address')) {
-                $table->dropColumn('address');
-            }
-            if (Schema::hasColumn('users', 'hobby')) {
-                $table->dropColumn('hobby');
-            }
-            if (Schema::hasColumn('users', 'school_enrolled')) {
-                $table->dropColumn('school_enrolled');
-            }
-            if (Schema::hasColumn('users', 'age')) {
-                $table->dropColumn('age');
-            }
-            if (Schema::hasColumn('users', 'date_of_birth')) {
-                $table->dropColumn('date_of_birth');
+            foreach (['date_of_birth', 'gender', 'education', 'about', 'bio', 'language', 'timezone', 'profile_completed'] as $column) {
+                if (Schema::hasColumn('users', $column)) {
+                    $table->dropColumn($column);
+                }
             }
         });
     }

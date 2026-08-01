@@ -695,52 +695,42 @@
         section.classList.toggle('open');
     }
 
-    // Use Server-Sent Events for realtime monitoring updates
-    if (typeof(EventSource) !== 'undefined') {
-        const es = new EventSource('{{ route('monitoring.stream') }}');
-        es.onmessage = function(e) {
-            try {
-                const data = JSON.parse(e.data);
-                if (data.stats) {
-                    const a = data.stats;
-                    const elA = document.getElementById('live-active-users');
-                    const elE = document.getElementById('live-events-today');
-                    const elEn = document.getElementById('live-enrollments-today');
-                    const elB = document.getElementById('live-badges-today');
-                    if (elA) elA.textContent = a.active_users ?? 0;
-                    if (elE) elE.textContent = a.events_today ?? 0;
-                    if (elEn) elEn.textContent = a.enrollments_today ?? 0;
-                    if (elB) elB.textContent = a.badges_today ?? 0;
+    function refreshLiveMonitoring() {
+        const liveUrl = '{{ route('monitoring.live') }}';
+        fetch(liveUrl)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Monitoring endpoint unavailable');
                 }
+                return response.json();
+            })
+            .then(data => {
+                document.getElementById('live-active-users').textContent = data.stats.active_users;
+                document.getElementById('live-events-today').textContent = data.stats.events_today;
+                document.getElementById('live-enrollments-today').textContent = data.stats.enrollments_today;
+                document.getElementById('live-badges-today').textContent = data.stats.badges_today;
 
-                if (data.activity) {
-                    const list = document.getElementById('live-activity-list');
-                    if (list) {
-                        list.innerHTML = '';
-                        data.activity.forEach(item => {
-                            const card = document.createElement('div');
-                            card.className = 'badge-card';
-                            card.innerHTML = `<div class="badge-name">${item.title}</div><div class="badge-count">${item.detail} · ${item.time}</div>`;
-                            list.appendChild(card);
-                        });
-                    }
-                }
+                const list = document.getElementById('live-activity-list');
+                if (!list) return;
 
-                if (data.academySvg) {
-                    const wrap = document.getElementById('academy-chart-wrap');
-                    if (wrap) {
-                        wrap.innerHTML = data.academySvg;
-                    }
+                list.innerHTML = '';
+                data.activity.forEach(item => {
+                    const card = document.createElement('div');
+                    card.className = 'badge-card';
+                    card.innerHTML = `<div class="badge-name">${item.title}</div><div class="badge-count">${item.detail} · ${item.time}</div>`;
+                    list.appendChild(card);
+                });
+            })
+            .catch(() => {
+                const list = document.getElementById('live-activity-list');
+                if (list) {
+                    list.innerHTML = '<div class="badge-card"><div class="badge-name">Monitoring unavailable</div><div class="badge-count">The live feed could not be loaded.</div></div>';
                 }
-            } catch (err) {
-                console.error('Realtime parse error', err);
-            }
-        };
-        es.onerror = function() { console.warn('Realtime stream error'); };
-    } else {
-        // fallback to polling if SSE not supported
-        setInterval(function(){ fetch('{{ route('monitoring.live') }}').then(r=>r.json()).then(d=>console.log('polled',d)).catch(()=>{}); }, 15000);
+            });
     }
+
+    refreshLiveMonitoring();
+    setInterval(refreshLiveMonitoring, 15000);
 </script>
 
 </body>

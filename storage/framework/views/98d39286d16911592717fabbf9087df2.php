@@ -445,6 +445,13 @@
 
                                     </span>
                                 <?php endif; ?>
+                                <?php if($user->user_code ?? null): ?>
+                                    <span>
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 9h12"/><path d="M6 13h8"/></svg>
+                                        <?php echo e($user->user_code); ?>
+
+                                    </span>
+                                <?php endif; ?>
                             </div>
                         </div>
                     </div>

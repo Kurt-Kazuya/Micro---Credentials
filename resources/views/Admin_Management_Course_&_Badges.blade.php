@@ -429,20 +429,8 @@
             <div class="course-card-title">{{ $course->title }}</div>
 
             <div class="course-card-meta">
-                {{ $course->students }} Students · {{ $course->faculty }} Faculty ·<br>
-                Badge: {{ $course->badge ?? '—' }}
-            </div>
-
-            {{-- Status / actions --}}
-            <div style="margin-top:12px;font-size:0.85rem;color:#374151;display:flex;align-items:center;gap:12px;">
-                <div style="font-weight:700;color:#0d1b6e;">Status:</div>
-                <div style="padding:6px 10px;border-radius:10px;background:#f3f4f6;color:#111827;font-weight:700;">{{ $course->status ?? 'Unknown' }}</div>
-                @if (strtolower($course->status ?? '') === 'pending')
-                    <form action="{{ route('admin.courses.approve', $course->id) }}" method="POST" style="margin-left:auto;">
-                        @csrf
-                        <button type="submit" style="background:#10b981;border:none;color:#fff;padding:8px 12px;border-radius:8px;cursor:pointer;font-weight:700;">Approve</button>
-                    </form>
-                @endif
+                {{ $course->students }} Students . {{ $course->faculty }} Faculty .<br>
+                Badge: {{ $course->badge }}
             </div>
 
             <div class="progress-track">

@@ -45,6 +45,19 @@
             background: var(--white);
             color: var(--navy);
             min-height: 100vh;
+            opacity: 0;
+            transition: opacity 240ms ease, transform 240ms ease;
+            transform: translateY(10px);
+        }
+
+        body.page-transition-ready {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        body.page-transition-leave {
+            opacity: 0;
+            transform: translateY(10px);
         }
 
         img { max-width: 100%; display: block; }
@@ -124,6 +137,37 @@
 
     
     <?php echo $__env->make('components.footer', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            document.body.classList.add('page-transition-ready');
+
+            document.querySelectorAll('a[href]').forEach(function (link) {
+                link.addEventListener('click', function (event) {
+                    var href = link.getAttribute('href');
+                    if (!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:')) {
+                        return;
+                    }
+                    if (link.target === '_blank' || link.hasAttribute('download') || link.dataset.noTransition !== undefined) {
+                        return;
+                    }
+                    try {
+                        var url = new URL(href, location.href);
+                    } catch (e) {
+                        return;
+                    }
+                    if (location.origin !== url.origin) {
+                        return;
+                    }
+                    event.preventDefault();
+                    document.body.classList.add('page-transition-leave');
+                    setTimeout(function () {
+                        window.location.href = href;
+                    }, 180);
+                });
+            });
+        });
+    </script>
 
     <?php echo $__env->yieldPushContent('scripts'); ?>
 </body>
