@@ -7,71 +7,48 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
 
+/**
+ * RoleBasedAccess — guards a route group so only one role may enter.
+ *
+ * Usage (FQCN + parameter, no alias registration needed):
+ *   Route::middleware(RoleBasedAccess::class.':admin')->group(...);
+ *   Route::middleware(RoleBasedAccess::class.':faculty')->group(...);
+ *   Route::middleware(RoleBasedAccess::class.':student')->group(...);
+ *
+ * Guests are sent to the login page; a logged-in user who belongs to a
+ * different role is bounced back to their own dashboard (never a 403
+ * dead-end), which keeps every sidebar/topbar link usable.
+ */
 class RoleBasedAccess
 {
     /**
-     * Handle an incoming request.
+     * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
      */
-    public function handle(Request $request, Closure $next, string ...$roles): Response
+    public function handle(Request $request, Closure $next, string $role): Response
     {
         if (! Auth::check()) {
-            if ($this->shouldAllowGuestAccess($request)) {
-                return $next($request);
-            }
-
             return redirect()->route('login');
         }
 
-        $roleId = (int) (Auth::user()->role_id ?? 3);
-        $requiredRole = strtolower($roles[0] ?? 'student');
+        $user = Auth::user();
 
-        if (! $this->isAllowedRole($roleId, $requiredRole)) {
-            return redirect()->route($this->dashboardRouteForRole($roleId));
+        if (! $user->is_active) {
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return redirect()->route('login')
+                ->withErrors(['email' => 'Your account has been deactivated.']);
+        }
+
+        if ($user->roleName() !== strtolower($role)) {
+            return redirect()->route(match ($user->roleName()) {
+                'admin'   => 'admin.dashboard',
+                'faculty' => 'faculty.dashboard',
+                default   => 'dashboard',
+            });
         }
 
         return $next($request);
-    }
-
-    protected function shouldAllowGuestAccess(Request $request): bool
-    {
-        $routeName = $request->route()?->getName();
-
-        return in_array($routeName, [
-            'admin.dashboard',
-            'admin.profile',
-            'admin.usermanagement',
-            'admin.courses',
-            'admin.report',
-            'faculty.dashboard',
-            'faculty.courses',
-            'faculty.create',
-            'faculty.analytics',
-            'dashboard',
-            'courses.browse',
-            'profile.show',
-            'pathways.index',
-            'analytics.index',
-            'badges.index',
-            'certificates.index',
-        ], true);
-    }
-
-    protected function isAllowedRole(int $roleId, string $requiredRole): bool
-    {
-        return match ($requiredRole) {
-            'admin' => $roleId === 1,
-            'faculty' => $roleId === 2,
-            'student' => $roleId === 3,
-            default => false,
-        };
-    }
-
-    protected function dashboardRouteForRole(int $roleId): string
-    {
-        return match ($roleId) {
-            1 => 'admin.dashboard',
-            2 => 'faculty.dashboard',
-            default => 'dashboard',
-        };
     }
 }

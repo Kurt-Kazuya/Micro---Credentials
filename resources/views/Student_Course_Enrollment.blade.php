@@ -132,6 +132,30 @@
     .btn-mark-complete.done{background:var(--green);}
     /* Video player */
     .video-area{background:#1a1a3e;height:260px;display:flex;align-items:center;justify-content:center;cursor:pointer;}
+    /* When a real video is loaded, the frame follows the video's own size */
+    .video-area.has-video{height:auto;background:#000;padding:0;}
+    .video-area.has-video #lesson-video{width:100%;height:auto;max-height:70vh;display:block;}
+    /* Image / PDF / generic-file previews replace the placeholder */
+    .video-area.has-image{height:auto;background:#f6f7fc;padding:0;cursor:default;}
+    .video-area.has-image img{width:100%;height:auto;max-height:70vh;display:block;object-fit:contain;}
+    .video-area.has-pdf{height:70vh;min-height:400px;background:#525659;padding:0;cursor:default;}
+    .video-area.has-pdf iframe{width:100%;height:100%;border:0;display:block;}
+    .video-area.has-file{background:#f6f7fc;cursor:default;}
+    /* Uploaded file attachment card */
+    .file-attach{display:flex;align-items:center;gap:10px;padding:10px 12px;margin:14px auto 0;
+        max-width:560px;background:#f6f7fc;border:1px solid #e3e6f0;border-radius:10px;}
+    .file-attach-icon{width:34px;height:34px;flex:0 0 34px;border-radius:8px;background:var(--navy,#13176b);
+        color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;letter-spacing:.5px;}
+    .file-attach-info{flex:1;min-width:0;}
+    .file-attach-name{font-weight:800;color:var(--navy,#13176b);font-size:13px;
+        white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .file-attach-sub{font-size:11px;color:#8a8fa8;margin-top:1px;}
+    .file-attach-actions{display:flex;gap:6px;flex:0 0 auto;}
+    .file-attach-btn{padding:6px 12px;border-radius:8px;font-size:11px;font-weight:800;
+        background:var(--navy,#13176b);color:#fff;text-decoration:none;transition:background .2s;}
+    .file-attach-btn:hover{background:#0c0f4d;}
+    .file-attach-btn.ghost{background:#fff;color:var(--navy,#13176b);border:1px solid #d8dcee;}
+    .file-attach-btn.ghost:hover{background:#eef0f9;}
     .play-btn{width:64px;height:64px;background:rgba(255,255,255,.2);border-radius:50%;display:flex;align-items:center;justify-content:center;transition:background .2s;}
     .play-btn:hover{background:rgba(255,255,255,.35);}
     .play-btn svg{width:30px;height:30px;fill:#fff;margin-left:5px;}
@@ -282,11 +306,13 @@
                              id="li-{{ $mIndex }}-{{ $lIndex }}"
                              data-module="{{ $mIndex }}"
                              data-lid="{{ $mIndex }}-{{ $lIndex }}"
-                             onclick="{{ $isVid ? 'loadVideoLesson' : 'loadTextLesson' }}(
+                             onclick="loadLesson(
+                                 '{{ $lesson->type ?? 'Text' }}',
                                  '{{ addslashes($lesson->title) }}',
                                  '{{ addslashes($lesson->description ?? $lesson->title) }}',
                                  '{{ $lesson->duration ?? '15m' }}',
-                                 {{ $mIndex }}, {{ $lIndex }}
+                                 {{ $mIndex }}, {{ $lIndex }},
+                                 {{ $lesson->file_url ? "'" . $lesson->file_url . "'" : 'null' }}
                              )">
                             <span class="lesson-title-text">{{ $lesson->title }}</span>
                             <span class="lesson-meta">{{ $lesson->type }} · {{ $lesson->duration }}</span>
@@ -370,8 +396,24 @@
                 </div>
                 {{-- Video --}}
                 <div class="video-area" onclick="playVideo()">
+                    <video id="lesson-video" controls preload="metadata"
+                           style="display:none;width:100%;height:auto;max-height:70vh;background:#000;border-radius:inherit;"
+                           onclick="event.stopPropagation()"></video>
+                    <img id="lesson-image" alt="" style="display:none;">
+                    <iframe id="lesson-pdf" title="Lesson document" style="display:none;"></iframe>
                     <div class="play-btn" id="play-btn">
                         <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><polygon points="5,3 19,12 5,21"/></svg>
+                    </div>
+                </div>
+                <div class="file-attach" id="lesson-file-card" style="display:none;">
+                    <div class="file-attach-icon" id="lesson-file-ext">FILE</div>
+                    <div class="file-attach-info">
+                        <div class="file-attach-name" id="lesson-file-name">Attachment</div>
+                        <div class="file-attach-sub" id="lesson-file-sub">Attached file</div>
+                    </div>
+                    <div class="file-attach-actions">
+                        <a class="file-attach-btn" id="lesson-file-open" href="#" target="_blank" rel="noopener">Open</a>
+                        <a class="file-attach-btn ghost" id="lesson-file-dl" href="#" download>Download</a>
                     </div>
                 </div>
                 {{-- Text --}}
@@ -420,80 +462,15 @@
 /* ═══════════════════════════════════════════════════════
    QUIZ DATA — one per module, 3 questions each
 ═══════════════════════════════════════════════════════ */
-var QUIZ_DATA = {
-    0: {   /* Module 1: Laravel Fundamentals */
-        title: 'Laravel Fundamentals Quiz',
-        passingScore: 75,
-        questions: [
-            {
-                label: 'Introduction to Laravel',
-                question: 'What is Laravel?',
-                options: [
-                    { letter:'A', text:'MVC Framework' },
-                    { letter:'B', text:'PHP Language'  },
-                    { letter:'C', text:'Database Tool' }
-                ],
-                correct: 'A'
-            },
-            {
-                label: 'Routing and Controllers',
-                question: 'What is Routing and Controllers?',
-                options: [
-                    { letter:'A', text:'URL Mapping & Logic Handlers' },
-                    { letter:'B', text:'Database ORM'  },
-                    { letter:'C', text:'View Engine'   }
-                ],
-                correct: 'A'
-            },
-            {
-                label: 'Blade Templates',
-                question: 'What is Blade Templates?',
-                options: [
-                    { letter:'A', text:'CSS Framework'      },
-                    { letter:'B', text:'PHP Template Engine' },
-                    { letter:'C', text:'JavaScript Library' }
-                ],
-                correct: 'B'
-            }
-        ]
-    },
-    1: {   /* Module 2: Database & Eloquent ORM */
-        title: 'Database & Eloquent ORM Quiz',
-        passingScore: 75,
-        questions: [
-            {
-                label: 'Database Migrations',
-                question: 'What is Database Migrations?',
-                options: [
-                    { letter:'A', text:'Schema Version Control' },
-                    { letter:'B', text:'Data Transfer Protocol' },
-                    { letter:'C', text:'Table Relationship'     }
-                ],
-                correct: 'A'
-            },
-            {
-                label: 'Eloquent Relationships',
-                question: 'What is Eloquent Relationships?',
-                options: [
-                    { letter:'A', text:'SQL Query Builder'   },
-                    { letter:'B', text:'ORM Model Relations' },
-                    { letter:'C', text:'Data Migration'      }
-                ],
-                correct: 'B'
-            },
-            {
-                label: 'Eloquent ORM',
-                question: 'What is Eloquent ORM?',
-                options: [
-                    { letter:'A', text:'Database Query Tool'      },
-                    { letter:'B', text:'Object-Relational Mapper' },
-                    { letter:'C', text:'Migration Manager'        }
-                ],
-                correct: 'B'
-            }
-        ]
-    }
-};
+/* Quizzes come straight from the database — exactly what the faculty
+   built on the manage screen. Modules without a quiz get an empty set. */
+var QUIZ_DATA = {!! $modules->mapWithKeys(fn ($m, $i) => [
+    $i => [
+        'title'        => $m->quiz->title ?? '',
+        'passingScore' => (int) ($m->quiz->passing_score ?? 75),
+        'questions'    => $m->quiz->questions ?? [],
+    ],
+])->toJson(JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) !!};
 
 /* ═══════════════════════════════════════════════════════
    STATE
@@ -509,6 +486,7 @@ var _retakeQMap    = [];         // maps rendered question index → original qu
 // Count total quiz questions on load
 document.addEventListener('DOMContentLoaded', function () {
     Object.values(QUIZ_DATA).forEach(function(m){ _totalQuizQ += m.questions.length; });
+    restoreProgress(_savedProgress);
 });
 
 /* ── Helpers ──────────────────────────────────────── */
@@ -523,6 +501,100 @@ function toggleModule(listId, chevId) {
     const o = l.classList.toggle('open'); c.classList.toggle('open', o);
 }
 
+/* ── Real-time progress persistence ─────────────────────────────
+   Every lesson marked complete and every quiz submit is saved to the
+   server, and the saved state is restored on load — so the student's
+   percentage is the same on every page, every visit. */
+var _savedProgress = {!! json_encode($saved_progress ?? ['completed_lessons' => [], 'module_scores' => new \stdClass()]) !!};
+var _saveTimer = null;
+
+function saveProgress() {
+    if (_saveTimer) clearTimeout(_saveTimer);
+    _saveTimer = setTimeout(function () {
+        var completed = Array.from(document.querySelectorAll('.lesson-item.lesson-correct'))
+            .map(function (el) { return el.dataset.lid; });
+        var totalCorrect = Object.values(_moduleScores).reduce(function (s, v) { return s + v; }, 0);
+        var pct = _totalQuizQ > 0 ? Math.min(100, Math.round((totalCorrect / _totalQuizQ) * 100)) : 0;
+
+        fetch('{{ route('courses.progress', $course->id) }}', {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                percent: pct,
+                completed_lessons: completed,
+                module_scores: _moduleScores
+            })
+        }).catch(function () { /* offline — next change will retry */ });
+    }, 600);
+}
+
+function restoreProgress(saved) {
+    if (!saved) return;
+
+    (saved.completed_lessons || []).forEach(function (lid) {
+        var el = document.querySelector('.lesson-item[data-lid="' + lid + '"]');
+        if (el) el.classList.add('lesson-correct');
+    });
+
+    _moduleScores = saved.module_scores || {};
+
+    // Quiz buttons + module locks follow the saved quiz results
+    Object.keys(QUIZ_DATA).forEach(function (k) {
+        var i     = parseInt(k, 10);
+        var data  = QUIZ_DATA[i];
+        var score = _moduleScores[i];
+        if (score === undefined) return;
+        var pct = Math.round((score / data.questions.length) * 100);
+        if (pct >= (data.passingScore || 75)) {
+            var doneBtn = document.getElementById('qbtn-' + i);
+            if (doneBtn) {
+                doneBtn.classList.remove('unlocked', 'locked');
+                doneBtn.classList.add('viewed');
+                doneBtn.textContent = 'VIEW';
+                doneBtn.title = 'View your quiz results';
+            }
+            unlockModule(i + 1);
+        }
+    });
+
+    // Lesson-driven states last, so "Completed" labels win
+    Object.keys(QUIZ_DATA).forEach(function (k) {
+        var i = parseInt(k, 10);
+        checkQuizUnlock(i);
+        checkModuleComplete(i);
+    });
+
+    updateProgress();
+}
+
+/* ── Report course completion to the server (awards the badge) ──
+   Fires once, the moment the course reaches 100%. The Admin
+   "Recent Badges" panel picks the new badge up within 15 seconds. */
+var _completionReported = false;
+function reportCourseCompletion() {
+    if (_completionReported) return;
+    _completionReported = true;
+    fetch('{{ route('courses.complete', $course->id) }}', {
+        method: 'POST',
+        headers: {
+            'X-CSRF-TOKEN': '{{ csrf_token() }}',
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        },
+        body: '{}'
+    }).then(function(r){ return r.json(); })
+      .then(function(data){
+          if (data && data.badge_awarded) {
+              try { console.log('Badge earned: ' + data.badge_awarded); } catch (e) {}
+          }
+      })
+      .catch(function(){ _completionReported = false; });
+}
+
 /* ── Progress bar — based on quiz correct answers ONLY ── */
 function updateProgress() {
     /* Sum correct answers per module (retakes REPLACE, not add).
@@ -532,6 +604,7 @@ function updateProgress() {
     const pct = Math.min(100, raw);
     document.getElementById('nav-fill').style.width = pct + '%';
     document.getElementById('nav-pct').textContent  = pct + '%';
+    if (pct >= 100) reportCourseCompletion();
 }
 
 /* ── Module Welcome ───────────────────────────────── */
@@ -586,14 +659,93 @@ function _prepLesson(title, desc, duration, modIdx, lesIdx) {
 }
 
 function loadVideoLesson(title, desc, duration, modIdx, lesIdx) {
-    _prepLesson(title, desc, duration, modIdx, lesIdx);
-    document.getElementById('view-lesson').classList.remove('text-mode');
-    hideAllViews();
-    document.getElementById('view-lesson').style.display = 'flex';
+    loadLesson('Video', title, desc, duration, modIdx, lesIdx, null);
 }
 function loadTextLesson(title, desc, duration, modIdx, lesIdx) {
+    loadLesson('Text', title, desc, duration, modIdx, lesIdx, null);
+}
+
+/* ── Media-aware lesson loader: shows the faculty-uploaded file ──
+   Video mp4 → keeps the dark player area and plays inline.
+   Image     → the image itself fills the area.
+   PDF       → inline document preview.
+   Other     → clean icon tile + attachment card below. */
+function loadLesson(type, title, desc, duration, modIdx, lesIdx, fileUrl) {
     _prepLesson(title, desc, duration, modIdx, lesIdx);
-    document.getElementById('view-lesson').classList.add('text-mode');
+
+    type = (type || 'Text').toLowerCase();
+    var videoEl   = document.getElementById('lesson-video');
+    var imageEl   = document.getElementById('lesson-image');
+    var pdfEl     = document.getElementById('lesson-pdf');
+    var fileCard  = document.getElementById('lesson-file-card');
+    var videoArea = document.querySelector('#view-lesson .video-area');
+    var isText    = (type === 'text' && !fileUrl);
+
+    document.getElementById('view-lesson').classList.toggle('text-mode', isText);
+
+    // Reset every preview surface before swapping lessons
+    if (videoEl) {
+        videoEl.pause();
+        videoEl.removeAttribute('src');
+        videoEl.load();
+        videoEl.style.display = 'none';
+    }
+    if (imageEl) { imageEl.removeAttribute('src'); imageEl.style.display = 'none'; }
+    if (pdfEl)   { pdfEl.removeAttribute('src');   pdfEl.style.display   = 'none'; }
+    if (fileCard) fileCard.style.display = 'none';
+    if (videoArea) videoArea.classList.remove('has-video', 'has-image', 'has-pdf', 'has-file');
+
+    if (fileUrl && (type === 'video' || type === 'pdf' || type === 'file' || type === 'image')) {
+        document.getElementById('play-btn').style.display = 'none';
+
+        if (type === 'video') {
+            // Videos keep the dark frame and play inline
+            videoEl.src = fileUrl;
+            videoEl.style.display = 'block';
+            if (videoArea) videoArea.classList.add('has-video');
+        } else {
+            // Everything else replaces the placeholder with the file itself
+            var ext = (fileUrl.split('.').pop() || 'file').toUpperCase().substring(0, 5);
+
+            if (type === 'image' && imageEl) {
+                imageEl.src = fileUrl;
+                imageEl.alt = title;
+                imageEl.style.display = 'block';
+                if (videoArea) videoArea.classList.add('has-image');
+            } else if (type === 'pdf' && pdfEl) {
+                pdfEl.src = fileUrl;
+                pdfEl.style.display = 'block';
+                if (videoArea) videoArea.classList.add('has-pdf');
+            } else if (videoArea) {
+                videoArea.classList.add('has-file');
+                var pb = document.getElementById('play-btn');
+                if (pb) {
+                    pb.style.display = 'flex';
+                    pb.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.5" style="width:30px;height:30px;margin-left:0;">'
+                        + '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>'
+                        + '<polyline points="14 2 14 8 20 8"/></svg>';
+                }
+            }
+
+            // Attachment card below (open / download)
+            if (fileCard) {
+                var officeExts = ['DOC', 'DOCX', 'XLS', 'XLSX', 'PPT', 'PPTX'];
+                var openUrl = fileUrl;
+                if (officeExts.indexOf(ext) !== -1) {
+                    openUrl = 'https://view.officeapps.live.com/op/view.aspx?src=' + encodeURIComponent(fileUrl);
+                    document.getElementById('lesson-file-sub').textContent = ext + ' document · opens in the browser via Office Online viewer';
+                } else {
+                    document.getElementById('lesson-file-sub').textContent = ext + ' file · opens in a new tab';
+                }
+                document.getElementById('lesson-file-ext').textContent  = ext;
+                document.getElementById('lesson-file-name').textContent = title + '.' + ext.toLowerCase();
+                document.getElementById('lesson-file-open').href = openUrl;
+                document.getElementById('lesson-file-dl').href   = fileUrl;
+                fileCard.style.display = 'flex';
+            }
+        }
+    }
+
     hideAllViews();
     document.getElementById('view-lesson').style.display = 'flex';
 }
@@ -614,6 +766,7 @@ function markComplete() {
     }
     checkQuizUnlock(_curModIdx);
     checkModuleComplete(_curModIdx);
+    saveProgress();
 }
 
 /* ── Unlock QUIZ when all lessons are marked complete ─ */
@@ -682,6 +835,10 @@ function handleQuizClick(modIdx) {
     }
     // If already submitted (viewed), open in read-only mode
     const viewOnly = qbtn && qbtn.classList.contains('viewed');
+    if (!QUIZ_DATA[modIdx] || !QUIZ_DATA[modIdx].questions || QUIZ_DATA[modIdx].questions.length === 0) {
+        alert('No quiz has been added to this module yet.');
+        return;
+    }
     showQuizView(modIdx, viewOnly);
 }
 
@@ -865,6 +1022,7 @@ function submitQuiz() {
     }
     _moduleScores[_curModIdx] = correctCount;
     updateProgress();
+    saveProgress();
 
     // Score result
     const pct      = Math.round((correctCount / data.questions.length) * 100);
@@ -898,6 +1056,9 @@ function submitQuiz() {
             const nb = document.getElementById('btn-next-module');
             nb.textContent   = 'Continue to Module ' + (_curModIdx + 2) + ' →';
             nb.style.display = 'flex';
+        } else {
+            // Last module passed — course finished, award the badge
+            reportCourseCompletion();
         }
     } else {
         // ❌ FAILED → next module stays locked, offer retake after 24h cooldown

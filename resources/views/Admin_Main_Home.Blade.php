@@ -516,7 +516,7 @@
         <div class="sb-section-hd" onclick="toggleSection('sec-manage')">
             <div class="sb-hd-left">
                 <span class="sb-section-label">Management</span>
-                <span class="sb-lesson-count">2 sections</span>
+                <span class="sb-lesson-count">3 sections</span>
             </div>
             <span class="sb-chevron">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -531,6 +531,9 @@
             </a>
             <a href="{{ route('admin.courses') }}" class="sb-item">
                 <span class="sb-item-text">Courses &amp; Badges</span>
+            </a>
+            <a href="{{ route('admin.facultycodes') }}" class="sb-item">
+                <span class="sb-item-text">Faculty Codes</span>
             </a>
         </div>
     </div>
@@ -643,7 +646,7 @@
             <div class="card-hd">
                 <span class="card-title">Recent Badges</span>
             </div>
-            <div class="badges-grid">
+            <div class="badges-grid" id="recent-badges-grid">
                 @foreach ($recentBadges as $badge)
                 <div class="badge-card">
                     <div class="badge-name">{{ $badge->name }}</div>
@@ -709,6 +712,18 @@
                 document.getElementById('live-events-today').textContent = data.stats.events_today;
                 document.getElementById('live-enrollments-today').textContent = data.stats.enrollments_today;
                 document.getElementById('live-badges-today').textContent = data.stats.badges_today;
+
+                // Recent Badges — refresh the Earned counters in real time
+                const badgeGrid = document.getElementById('recent-badges-grid');
+                if (badgeGrid && Array.isArray(data.recentBadges)) {
+                    badgeGrid.innerHTML = '';
+                    data.recentBadges.forEach(badge => {
+                        const card = document.createElement('div');
+                        card.className = 'badge-card';
+                        card.innerHTML = `<div class="badge-name">${badge.name}</div><div class="badge-count">${badge.earned_count} Earned</div>`;
+                        badgeGrid.appendChild(card);
+                    });
+                }
 
                 const list = document.getElementById('live-activity-list');
                 if (!list) return;

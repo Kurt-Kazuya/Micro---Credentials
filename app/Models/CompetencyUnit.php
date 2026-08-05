@@ -8,8 +8,6 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class CompetencyUnit extends Model
 {
-    protected $table = 'competency_units';
-
     protected $fillable = [
         'competency_category_id',
         'title',
@@ -18,6 +16,11 @@ class CompetencyUnit extends Model
         'is_active',
     ];
 
+    protected function casts(): array
+    {
+        return ['is_active' => 'boolean'];
+    }
+
     public function category(): BelongsTo
     {
         return $this->belongsTo(CompetencyCategory::class, 'competency_category_id');
@@ -25,21 +28,11 @@ class CompetencyUnit extends Model
 
     public function levels(): HasMany
     {
-        return $this->hasMany(CompetencyLevel::class);
+        return $this->hasMany(CompetencyLevel::class)->orderBy('level_number');
     }
 
     public function outcomes(): HasMany
     {
-        return $this->hasMany(CompetencyOutcome::class);
-    }
-
-    public function assessments(): HasMany
-    {
-        return $this->hasMany(Assessment::class);
-    }
-
-    public function progress(): HasMany
-    {
-        return $this->hasMany(CompetencyProgress::class);
+        return $this->hasMany(CompetencyOutcome::class)->orderBy('order');
     }
 }

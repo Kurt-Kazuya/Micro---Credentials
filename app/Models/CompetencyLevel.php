@@ -7,8 +7,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class CompetencyLevel extends Model
 {
-    protected $table = 'competency_levels';
-
     protected $fillable = [
         'competency_unit_id',
         'title',
@@ -17,6 +15,11 @@ class CompetencyLevel extends Model
         'points',
         'is_active',
     ];
+
+    protected function casts(): array
+    {
+        return ['is_active' => 'boolean'];
+    }
 
     public function unit(): BelongsTo
     {

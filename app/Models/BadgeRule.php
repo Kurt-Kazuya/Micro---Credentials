@@ -7,8 +7,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class BadgeRule extends Model
 {
-    protected $table = 'badge_rules';
-
     protected $fillable = [
         'badge_id',
         'rule_type',

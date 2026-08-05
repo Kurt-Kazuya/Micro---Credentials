@@ -417,40 +417,7 @@
         </div>
 
         <div class="courses-grid">
-            @php
-                $featuredCourses = [
-                    [
-                        'title'       => 'Full-Stack Web Development with Laravel',
-                        'description' => 'Master modern web development using Laravel framework, MySQL, and blade templating. Build Real-World applications from scratch.',
-                        'professor'   => 'Prof. Juan Dela Cruz',
-                        'hours'       => 40,
-                        'rating'      => 4,
-                        'category'    => 'Web Development',
-                        'level'       => 'Intermediate',
-                        'slug'        => url('/courses/fullstack-laravel'),
-                    ],
-                    [
-                        'title'       => 'Computer Networking Fundamentals',
-                        'description' => 'Master modern web development using Laravel framework, MySQL, and blade templating. Build Real-World applications from scratch.',
-                        'professor'   => 'Prof. Juan Dela Cruz',
-                        'hours'       => 40,
-                        'rating'      => 4,
-                        'category'    => 'Web Development',
-                        'level'       => 'Intermediate',
-                        'slug'        => url('/courses/networking'),
-                    ],
-                    [
-                        'title'       => 'Introduction to Artificial Intelligence',
-                        'description' => 'Master modern web development using Laravel framework, MySQL, and blade templating. Build Real-World applications from scratch.',
-                        'professor'   => 'Prof. Juan Dela Cruz',
-                        'hours'       => 40,
-                        'rating'      => 4,
-                        'category'    => 'Web Development',
-                        'level'       => 'Intermediate',
-                        'slug'        => url('/courses/intro-ai'),
-                    ],
-                ];
-            @endphp
+            @php $featuredCourses = $featuredCourses ?? []; @endphp
 
             @foreach($featuredCourses as $course)
                 @include('components.course-card', ['course' => $course])
@@ -555,40 +522,7 @@
         </div>
 
         <div class="courses-grid">
-            @php
-                $latestCourses = [
-                    [
-                        'title'       => 'Full-Stack Web Development with Laravel',
-                        'description' => 'Master modern web development using Laravel framework, MySQL, and blade templating. Build Real-World applications from scratch.',
-                        'professor'   => 'Prof. Juan Dela Cruz',
-                        'hours'       => 40,
-                        'rating'      => 4,
-                        'category'    => 'Web Development',
-                        'level'       => 'Intermediate',
-                        'slug'        => url('/courses/fullstack-laravel'),
-                    ],
-                    [
-                        'title'       => 'Computer Networking Fundamentals',
-                        'description' => 'Master modern web development using Laravel framework, MySQL, and blade templating. Build Real-World applications from scratch.',
-                        'professor'   => 'Prof. Juan Dela Cruz',
-                        'hours'       => 40,
-                        'rating'      => 4,
-                        'category'    => 'Web Development',
-                        'level'       => 'Intermediate',
-                        'slug'        => url('/courses/networking'),
-                    ],
-                    [
-                        'title'       => 'Introduction to Artificial Intelligence',
-                        'description' => 'Master modern web development using Laravel framework, MySQL, and blade templating. Build Real-World applications from scratch.',
-                        'professor'   => 'Prof. Juan Dela Cruz',
-                        'hours'       => 40,
-                        'rating'      => 4,
-                        'category'    => 'Web Development',
-                        'level'       => 'Intermediate',
-                        'slug'        => url('/courses/intro-ai'),
-                    ],
-                ];
-            @endphp
+            @php $latestCourses = $latestCourses ?? []; @endphp
 
             @foreach($latestCourses as $course)
                 @include('components.course-card', ['course' => $course])

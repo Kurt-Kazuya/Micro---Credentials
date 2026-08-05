@@ -157,6 +157,26 @@
         }
         .register-login a:hover { opacity: 0.75; }
 
+        /* Faculty Register button */
+        .register-faculty {
+            display: block;
+            text-align: center;
+            margin-top: 0.9rem;
+            padding: 0.7rem;
+            border: 1px solid rgba(232,168,0,0.55);
+            border-radius: 10px;
+            color: var(--gold);
+            font-family: var(--font-display);
+            font-weight: 700;
+            font-size: 0.85rem;
+            letter-spacing: 0.02em;
+            transition: background 0.2s, color 0.2s, transform 0.2s;
+        }
+        .register-faculty:hover {
+            background: rgba(232,168,0,0.14);
+            transform: translateY(-1px);
+        }
+
         /* Errors */
         .form-error { color: #ff6b6b; font-size: 0.76rem; margin-top: 0.25rem; }
         .alert-error {
@@ -392,6 +412,9 @@
             <div class="register-login">
                 <a href="{{ route('login') }}">Already have an Account? Login here</a>
             </div>
+
+            {{-- Faculty staff register with an admin-issued Faculty Code --}}
+            <a href="{{ route('faculty.register') }}" class="register-faculty">Faculty Register</a>
 
         </div>
 

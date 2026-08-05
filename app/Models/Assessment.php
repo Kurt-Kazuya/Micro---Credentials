@@ -7,8 +7,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Assessment extends Model
 {
-    protected $table = 'assessments';
-
     protected $fillable = [
         'user_id',
         'competency_unit_id',
@@ -27,12 +25,12 @@ class Assessment extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function competencyUnit(): BelongsTo
+    public function unit(): BelongsTo
     {
         return $this->belongsTo(CompetencyUnit::class, 'competency_unit_id');
     }
 
-    public function competencyLevel(): BelongsTo
+    public function level(): BelongsTo
     {
         return $this->belongsTo(CompetencyLevel::class, 'competency_level_id');
     }

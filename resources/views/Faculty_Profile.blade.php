@@ -30,7 +30,7 @@
         'activity'       => [ ['label' => 'Mon', 'hours' => 5], ... ],      // this week
         'profileCourses' => collect of (object) [
             'title', 'category', 'students', 'rating',
-            'completion', 'earnings', 'status',
+            'completion', 'status',
         ],
     ]);
 --}}
@@ -664,7 +664,6 @@
                                 <th>Course</th>
                                 <th>Rating</th>
                                 <th>Completion Rate</th>
-                                <th>Earnings</th>
                                 <th>Status</th>
                             </tr>
                         </thead>
@@ -698,7 +697,6 @@
                                             <span class="progress-pct">{{ $course->completion ?? 0 }}%</span>
                                         </div>
                                     </td>
-                                    <td>{{ $course->earnings ?? '—' }}</td>
                                     <td>
                                         @php $st = strtolower($course->status ?? 'draft'); @endphp
                                         <span class="status-pill {{ in_array($st, ['active', 'published']) ? 'active' : ($st === 'archived' ? 'archived' : 'draft') }}">

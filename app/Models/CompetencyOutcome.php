@@ -7,13 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class CompetencyOutcome extends Model
 {
-    protected $table = 'competency_outcomes';
-
-    protected $fillable = [
-        'competency_unit_id',
-        'description',
-        'order',
-    ];
+    protected $fillable = ['competency_unit_id', 'description', 'order'];
 
     public function unit(): BelongsTo
     {

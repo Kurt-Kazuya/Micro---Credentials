@@ -7,8 +7,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class CompetencyProgress extends Model
 {
-    protected $table = 'competency_progresses';
-
     protected $fillable = [
         'user_id',
         'competency_unit_id',
@@ -18,12 +16,17 @@ class CompetencyProgress extends Model
         'completed_at',
     ];
 
+    protected function casts(): array
+    {
+        return ['completed_at' => 'datetime'];
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
-    public function competencyUnit(): BelongsTo
+    public function unit(): BelongsTo
     {
         return $this->belongsTo(CompetencyUnit::class, 'competency_unit_id');
     }

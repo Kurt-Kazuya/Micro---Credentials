@@ -477,7 +477,7 @@
         <div class="sb-section-hd" onclick="toggleSection('sec-manage')">
             <div class="sb-hd-left">
                 <span class="sb-section-label">Management</span>
-                <span class="sb-lesson-count">2 sections</span>
+                <span class="sb-lesson-count">3 sections</span>
             </div>
             <span class="sb-chevron">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -492,6 +492,9 @@
             </a>
             <a href="{{ route('admin.courses') }}" class="sb-item">
                 <span class="sb-item-text">Courses &amp; Badges</span>
+            </a>
+            <a href="{{ route('admin.facultycodes') }}" class="sb-item">
+                <span class="sb-item-text">Faculty Codes</span>
             </a>
         </div>
     </div>

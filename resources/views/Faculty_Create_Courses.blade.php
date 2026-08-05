@@ -235,6 +235,18 @@
         <form method="POST" action="{{ route('faculty.create.store') }}" enctype="multipart/form-data">
             @csrf
 
+        {{-- Validation / save errors — only visible when something went wrong --}}
+        @if ($errors->any())
+        <div style="background:#fdecea;border:1px solid #f2b8b5;color:#a93226;padding:14px 18px;border-radius:12px;margin-bottom:18px;font-size:14px;font-weight:600;">
+            <strong>The course couldn't be saved. Please fix the following:</strong>
+            <ul style="margin:8px 0 0 20px;font-weight:500;">
+                @foreach ($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
+        </div>
+        @endif
+
         {{-- ── Basic Information ── --}}
         <section class="form-card">
             <div class="form-card-head"><h3>Basic Information</h3></div>
@@ -242,7 +254,7 @@
 
                 <div class="field">
                     <label>Course Title <span class="req">*</span></label>
-                    <input class="input" type="text" name="title" placeholder="e.g. Introduction to Web Development" required>
+                    <input class="input" type="text" name="title" placeholder="e.g. Introduction to Web Development" value="{{ old('title') }}" required>
                 </div>
 
                 <div class="field field-grid">

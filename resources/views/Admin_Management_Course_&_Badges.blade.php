@@ -305,6 +305,74 @@
             font-weight: 700;
             color: var(--navy);
         }
+
+        /* ─── CLICKABLE CARD ────────────────────────────────────── */
+        .course-card { cursor: pointer; transition: box-shadow .2s, transform .2s, border-color .2s; }
+        .course-card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); border-color: #c7cdf0; }
+
+        /* ─── APPROVAL STATUS PILLS ─────────────────────────────── */
+        .approval-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            padding: 4px 12px;
+            border-radius: 999px;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .approval-pill .dot { width: 8px; height: 8px; border-radius: 50%; }
+        .approval-pending  { background: #fff7ed; color: #b45309; border: 1px solid #fed7aa; }
+        .approval-pending .dot { background: #f59e0b; }
+        .approval-approved { background: #ecfdf5; color: #15803d; border: 1px solid #a7f3d0; }
+        .approval-approved .dot { background: #22c55e; }
+        .approval-denied   { background: #fff1f2; color: #b91c1c; border: 1px solid #fecdd3; }
+        .approval-denied .dot { background: #ef4444; }
+        .approval-draft    { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
+        .approval-draft .dot { background: #94a3b8; }
+
+        /* Pending cards get a subtle amber edge so they stand out */
+        .course-card.is-pending { border-color: #fcd9a0; background: #fffdf8; }
+
+        /* ─── APPROVE / DENIED BUTTONS ──────────────────────────── */
+        .course-actions { display: flex; gap: 10px; margin-top: 16px; }
+        .btn-approve, .btn-deny {
+            flex: 1;
+            border: none;
+            border-radius: 9px;
+            padding: 10px 0;
+            font-size: 0.84rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: background .18s, transform .15s;
+        }
+        .btn-approve { background: #16a34a; color: #fff; }
+        .btn-approve:hover { background: #15803d; transform: translateY(-1px); }
+        .btn-deny { background: #fff1f2; color: #b91c1c; border: 1.5px solid #fecdd3; }
+        .btn-deny:hover { background: #ffe4e6; transform: translateY(-1px); }
+
+        /* flash message */
+        .alert-success {
+            background: #ecfdf5;
+            border: 1px solid #a7f3d0;
+            color: #047857;
+            border-radius: 10px;
+            padding: 11px 16px;
+            font-size: 0.86rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+
+        .empty-state {
+            padding: 34px 24px;
+            border-radius: 14px;
+            background: var(--white);
+            border: 1.5px solid var(--border);
+            color: var(--text-muted);
+            text-align: center;
+        }
     </style>
 </head>
 <body>
@@ -373,7 +441,7 @@
         <div class="sb-section-hd" onclick="toggleSection('sec-manage')">
             <div class="sb-hd-left">
                 <span class="sb-section-label">Management</span>
-                <span class="sb-lesson-count">2 sections</span>
+                <span class="sb-lesson-count">3 sections</span>
             </div>
             <span class="sb-chevron">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -388,6 +456,9 @@
             {{-- Active pill on Courses & Badges --}}
             <a href="{{ route('admin.courses') }}" class="sb-item active">
                 <span class="sb-item-text">Courses &amp; Badges</span>
+            </a>
+            <a href="{{ route('admin.facultycodes') }}" class="sb-item">
+                <span class="sb-item-text">Faculty Codes</span>
             </a>
         </div>
     </div>
@@ -420,17 +491,31 @@
     <div class="page-heading">Courses &amp; Badges</div>
     <div class="page-sub">Manage every course and its associated completion badge.</div>
 
+    @if (session('success'))
+        <div class="alert-success">{{ session('success') }}</div>
+    @endif
+
     {{-- ── COURSE CARD GRID ─────────────────────────────────────────────── --}}
-    {{-- Standalone admin display cards — not linked to any student view. --}}
+    {{-- Click a card to open the full course detail page. Courses submitted
+         by faculty appear here with Approve / Denied buttons until reviewed. --}}
+    @if ($courses->isEmpty())
+        <div class="empty-state">No courses yet. Courses created by faculty will appear here for review.</div>
+    @else
     <div class="course-grid">
         @foreach ($courses as $course)
-        <div class="course-card">
+        <div class="course-card {{ $course->status_key === 'pending' ? 'is-pending' : '' }}"
+             onclick="window.location='{{ route('admin.courses.show', $course->id) }}'">
+
+            <span class="approval-pill approval-{{ $course->status_key }}">
+                <span class="dot"></span>{{ $course->status }}
+            </span>
 
             <div class="course-card-title">{{ $course->title }}</div>
 
             <div class="course-card-meta">
                 {{ $course->students }} Students . {{ $course->faculty }} Faculty .<br>
-                Badge: {{ $course->badge }}
+                Badge: {{ $course->badge }}<br>
+                <span style="color:var(--text-sub);">By {{ $course->instructor ?? 'Faculty' }}</span>
             </div>
 
             <div class="progress-track">
@@ -438,9 +523,23 @@
             </div>
 
             <div class="course-card-pct">{{ $course->percent }}% Complete</div>
+
+            @if ($course->status_key === 'pending')
+            <div class="course-actions">
+                <form method="POST" action="{{ route('admin.courses.approve', $course->id) }}" onclick="event.stopPropagation();" style="flex:1;display:flex;">
+                    @csrf
+                    <button type="submit" class="btn-approve" onclick="event.stopPropagation();">Approve</button>
+                </form>
+                <form method="POST" action="{{ route('admin.courses.deny', $course->id) }}" onclick="event.stopPropagation();" style="flex:1;display:flex;">
+                    @csrf
+                    <button type="submit" class="btn-deny" onclick="event.stopPropagation(); return confirm('Deny this course? It will not be published.');">Denied</button>
+                </form>
+            </div>
+            @endif
         </div>
         @endforeach
     </div>
+    @endif
 
 </main>
 </div>{{-- /layout --}}

@@ -383,7 +383,8 @@
                             </form>
                         </div>
 
-                        @php $showLessonForm = ($addLessonIndex ?? null) === $module->idx; @endphp
+                        @php $showLessonForm = ($addLessonIndex ?? null) === $module->idx
+    || (int) session('open_lesson_form') === (int) $module->idx; @endphp
 
                         {{-- ✅ Inline Add Lesson form — opened by the "+ Add Lesson"
                              button above · Save stores the lesson (session for now) ·
@@ -394,20 +395,26 @@
                               action="{{ route('faculty.lesson.store', [$course->id, $module->idx]) }}">
                             @csrf
                             <div class="row2">
-                                <input class="input-outline" type="text" name="lesson_title" placeholder="Lesson title *" required>
+                                <input class="input-outline" type="text" name="lesson_title" placeholder="Lesson title *" value="{{ old('lesson_title') }}" required>
                                 {{-- ✅ Upload the lesson file — PDF, video, image or text file.
                                      The lesson type is detected automatically from the file. --}}
                                 <label class="file-row" style="max-width:100%;">
                                     <span class="file-btn">Choose File</span>
                                     <span class="file-name" id="lesson-file-name-{{ $module->idx }}">No File Chosen</span>
                                     <input type="file" name="lesson_file" id="lesson-file-{{ $module->idx }}"
-                                           accept=".pdf,application/pdf,video/*,image/*,.txt"
+                                           accept=".pdf,.txt,video/*,image/*,audio/*,.zip,.doc,.docx,.ppt,.pptx,.xls,.xlsx"
                                            onchange="lessonFileChanged(this, {{ $module->idx }})">
                                 </label>
                             </div>
 
                             {{-- Optional written content (lessons without a file become Text lessons) --}}
                             <textarea class="textarea-outline" name="lesson_content" placeholder="Lesson Content ( Optional )"></textarea>
+
+                            @if ($errors->has('lesson_file') && (int) session('open_lesson_form') === (int) $module->idx)
+                            <div style="background:#fdecea;border:1px solid #f2b8b5;color:#a93226;padding:10px 14px;border-radius:10px;font-size:13px;font-weight:600;">
+                                {{ $errors->first('lesson_file') }}
+                            </div>
+                            @endif
 
                             <div class="actions">
                                 <input class="input-outline" type="number" name="duration" placeholder="Duration ( Min )" min="0">
