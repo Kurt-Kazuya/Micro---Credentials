@@ -122,6 +122,37 @@
         .stats{grid-template-columns:repeat(2,1fr);}
         .content-grid{grid-template-columns:1fr;}
     }
+
+    /* ── Progress panel items ── */
+    .prog-item{margin-bottom:16px;}
+    .prog-item:last-child{margin-bottom:0;}
+    .prog-item-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px;}
+    .prog-item-title{font-weight:700;color:var(--navy);font-size:13px;}
+    .prog-item-pct{font-weight:800;color:var(--gold-dark);font-size:13px;white-space:nowrap;}
+    .prog-bar{height:8px;border-radius:999px;background:#e8ecf7;overflow:hidden;}
+    .prog-bar-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,var(--navy),#3b41c8);transition:width .4s ease;}
+    .prog-bar-fill.prog-bar-done{background:linear-gradient(90deg,#1d9e6b,#34d399);}
+    .prog-item-sub{margin-top:5px;font-size:11.5px;color:var(--muted);}
+
+    /* ── About Me first-login modal ── */
+    .am-overlay{position:fixed;inset:0;z-index:1000;background:rgba(12,15,77,.55);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:20px;}
+    .am-card{background:#fff;border-radius:20px;box-shadow:0 24px 60px rgba(12,15,77,.35);width:100%;max-width:520px;max-height:92vh;overflow-y:auto;}
+    .am-head{background:linear-gradient(135deg,var(--navy),var(--navy-deep));color:#fff;padding:22px 26px;border-radius:20px 20px 0 0;}
+    .am-head h3{margin:0;font-size:20px;letter-spacing:.3px;}
+    .am-head p{margin:6px 0 0;font-size:13px;color:#c9cdf5;}
+    .am-body{padding:22px 26px 26px;}
+    .am-field{margin-bottom:14px;}
+    .am-field label{display:block;font-size:12.5px;font-weight:700;color:var(--navy);margin-bottom:5px;}
+    .am-field input,.am-field select,.am-field textarea{width:100%;border:1.5px solid var(--line);border-radius:10px;padding:9px 12px;font-size:13.5px;font-family:inherit;color:var(--ink);outline:none;transition:border-color .2s;}
+    .am-field input:focus,.am-field select:focus,.am-field textarea:focus{border-color:var(--gold);}
+    .am-field textarea{resize:vertical;min-height:64px;}
+    .am-hint{font-size:11px;color:var(--muted);margin-top:4px;}
+    .am-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+    .am-errors{background:#fde8e8;border:1px solid #f5b5b5;color:#b91c1c;border-radius:10px;padding:10px 14px;font-size:12.5px;margin-bottom:14px;}
+    .am-actions{display:flex;gap:10px;margin-top:18px;}
+    .am-save{flex:1;background:var(--gold);color:#fff;border:none;border-radius:12px;padding:12px;font-size:14px;font-weight:800;cursor:pointer;letter-spacing:.3px;transition:background .2s;}
+    .am-save:hover{background:var(--gold-dark);}
+    @media (max-width:560px){.am-row{grid-template-columns:1fr;}}
 </style>
 </head>
 <body>
@@ -220,7 +251,7 @@
             <div>
                 <h2>Welcome, {{ $user->name ?? 'Student' }}!</h2>
                 <p>Track your learning journey and continue where you left off.</p>
-                <p style="margin-top: 8px; color: var(--navy); font-weight: 700;">User Code: {{ $user->user_code ?? '—' }}</p>
+                <p style="margin-top: 8px; color: var(--navy); font-weight: 700;">Student ID: {{ $user->student_id ?? '—' }}</p>
             </div>
             <a href="{{ route('courses.browse') }}">
                 <button class="btn-outline" type="button">Explore Courses</button>
@@ -304,9 +335,26 @@
                     </div>
                     <div class="panel-body">
                         @forelse ($progress ?? [] as $item)
-                            <p>{{ $item }}</p>
+                            <div class="prog-item">
+                                <div class="prog-item-head">
+                                    <span class="prog-item-title">{{ \Illuminate\Support\Str::limit($item->title, 26) }}</span>
+                                    <span class="prog-item-pct">{{ $item->progress_percent }}%</span>
+                                </div>
+                                <div class="prog-bar">
+                                    <div class="prog-bar-fill{{ $item->is_completed ? ' prog-bar-done' : '' }}" style="width: {{ $item->progress_percent }}%;"></div>
+                                </div>
+                                <div class="prog-item-sub">
+                                    @if ($item->is_completed)
+                                        Completed
+                                    @elseif ($item->progress_percent > 0)
+                                        In progress · {{ $item->completed_lessons }} lesson{{ $item->completed_lessons === 1 ? '' : 's' }} done
+                                    @else
+                                        Not started yet
+                                    @endif
+                                </div>
+                            </div>
                         @empty
-                            <p>No progress activity yet.</p>
+                            <p>No progress activity yet. Enroll in a course to start tracking your progress.</p>
                         @endforelse
                     </div>
                 </div>
@@ -330,6 +378,73 @@
 
     </main>
 </div>
+
+@if (($show_about_form ?? false) || $errors->any())
+<div class="am-overlay" id="about-me-overlay">
+    <div class="am-card">
+        <div class="am-head">
+            <h3>About Me</h3>
+            <p>Tell us a bit about yourself — this personalizes your course recommendations.</p>
+        </div>
+        <div class="am-body">
+            @if ($errors->any())
+                <div class="am-errors">
+                    <strong>Please fix the following:</strong>
+                    <ul style="margin:6px 0 0;padding-left:18px;">
+                        @foreach ($errors->all() as $error)
+                            <li>{{ $error }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
+            <form method="POST" action="{{ route('profile.complete') }}">
+                @csrf
+                <div class="am-row">
+                    <div class="am-field">
+                        <label for="am-dob">Date of Birth</label>
+                        <input type="date" id="am-dob" name="date_of_birth" value="{{ old('date_of_birth') }}" max="{{ now()->toDateString() }}" required>
+                    </div>
+                    <div class="am-field">
+                        <label for="am-gender">Gender</label>
+                        <select id="am-gender" name="gender" required>
+                            <option value="" disabled {{ old('gender') ? '' : 'selected' }}>Select…</option>
+                            <option value="Male" {{ old('gender') === 'Male' ? 'selected' : '' }}>Male</option>
+                            <option value="Female" {{ old('gender') === 'Female' ? 'selected' : '' }}>Female</option>
+                            <option value="Prefer not to say" {{ old('gender') === 'Prefer not to say' ? 'selected' : '' }}>Prefer not to say</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="am-field">
+                    <label for="am-education">Education</label>
+                    <select id="am-education" name="education" required>
+                        <option value="" disabled {{ old('education') ? '' : 'selected' }}>Select your highest attainment…</option>
+                        @foreach (['Senior High School', 'High School Graduate', 'Vocational / Technical', 'Undergraduate (College)', "Bachelor's Degree", "Master's Degree", 'Doctorate / PhD'] as $level)
+                            <option value="{{ $level }}" {{ old('education') === $level ? 'selected' : '' }}>{{ $level }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="am-field">
+                    <label for="am-bio">Bio</label>
+                    <textarea id="am-bio" name="bio" placeholder="A short introduction about yourself…">{{ old('bio') }}</textarea>
+                </div>
+                <div class="am-field">
+                    <label for="am-have">Skills You already Have?</label>
+                    <input type="text" id="am-have" name="skills_have" value="{{ old('skills_have') }}" placeholder="e.g. HTML, Public Speaking, Excel">
+                    <div class="am-hint">Separate skills with commas. These will also appear on your Profile skills list.</div>
+                </div>
+                <div class="am-field">
+                    <label for="am-want">Skills You want to learn</label>
+                    <input type="text" id="am-want" name="skills_want" value="{{ old('skills_want') }}" placeholder="e.g. Python, Data Analysis, Networking">
+                    <div class="am-hint">We use this to recommend the most suitable courses for you.</div>
+                </div>
+                <div class="am-actions">
+                    <button type="submit" class="am-save">Save and Continue</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+@endif
 
 </body>
 </html>

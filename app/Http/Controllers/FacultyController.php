@@ -299,7 +299,7 @@ class FacultyController extends Controller
             ->get()
             ->map(fn (Enrollment $e) => (object) [
                 'name'       => $e->user->name ?? 'Student',
-                'student_id' => $e->user->user_code ?? $e->user->student_id ?? '',
+                'student_id' => $e->user->student_id ?? $e->user->user_code ?? '',
                 'status'     => $e->is_completed ? 'Completed' : 'Active',
                 'avatar_url' => $e->user->avatar_url ?? null,
             ])

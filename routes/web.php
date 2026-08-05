@@ -137,6 +137,7 @@ Route::middleware(RoleBasedAccess::class . ':student')->group(function () {
 
     Route::get('/profile', [StudentController::class, 'profile'])->name('profile.show');
     Route::patch('/profile', [StudentController::class, 'updateProfile'])->name('profile.update');
+    Route::post('/profile/complete', [StudentController::class, 'completeProfile'])->name('profile.complete');
 
     Route::get('/pathways', [StudentController::class, 'pathways'])->name('pathways.index');
     Route::get('/analytics', [StudentController::class, 'analytics'])->name('analytics.index');

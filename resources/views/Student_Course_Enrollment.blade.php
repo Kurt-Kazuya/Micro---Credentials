@@ -506,6 +506,8 @@ function toggleModule(listId, chevId) {
    server, and the saved state is restored on load — so the student's
    percentage is the same on every page, every visit. */
 var _savedProgress = {!! json_encode($saved_progress ?? ['completed_lessons' => [], 'module_scores' => new \stdClass()]) !!};
+var _serverUnlocks = {!! json_encode($quiz_unlocks ?? new \stdClass()) !!};   // moduleIdx → retake unlock timestamp (ms), from the server
+var _pendingQuizSubmit = null;   // last quiz result awaiting server confirmation
 var _saveTimer = null;
 
 function saveProgress() {
@@ -516,6 +518,16 @@ function saveProgress() {
         var totalCorrect = Object.values(_moduleScores).reduce(function (s, v) { return s + v; }, 0);
         var pct = _totalQuizQ > 0 ? Math.min(100, Math.round((totalCorrect / _totalQuizQ) * 100)) : 0;
 
+        var payload = {
+            percent: pct,
+            completed_lessons: completed,
+            module_scores: _moduleScores
+        };
+        if (_pendingQuizSubmit) {
+            payload.quiz_results = {};
+            payload.quiz_results[_pendingQuizSubmit.modIdx] = { score: _pendingQuizSubmit.correct };
+        }
+
         fetch('{{ route('courses.progress', $course->id) }}', {
             method: 'POST',
             headers: {
@@ -523,12 +535,25 @@ function saveProgress() {
                 'Accept': 'application/json',
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                percent: pct,
-                completed_lessons: completed,
-                module_scores: _moduleScores
-            })
-        }).catch(function () { /* offline — next change will retry */ });
+            body: JSON.stringify(payload)
+        })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (data) {
+            if (!data) return;
+            _pendingQuizSubmit = null;
+            // Server-authoritative cooldowns (survive reloads / other devices)
+            if (data.quiz_unlocks) {
+                Object.keys(data.quiz_unlocks).forEach(function (k) {
+                    _serverUnlocks[k] = data.quiz_unlocks[k];
+                    try { localStorage.setItem(retakeKey(k), String(data.quiz_unlocks[k])); } catch (e) {}
+                    if (String(k) === String(_curModIdx)
+                        && document.getElementById('view-quiz').style.display !== 'none') {
+                        showRetakeButton(_curModIdx);
+                    }
+                });
+            }
+        })
+        .catch(function () { /* offline — next change will retry */ });
     }, 600);
 }
 
@@ -549,8 +574,8 @@ function restoreProgress(saved) {
         var score = _moduleScores[i];
         if (score === undefined) return;
         var pct = Math.round((score / data.questions.length) * 100);
+        var doneBtn = document.getElementById('qbtn-' + i);
         if (pct >= (data.passingScore || 75)) {
-            var doneBtn = document.getElementById('qbtn-' + i);
             if (doneBtn) {
                 doneBtn.classList.remove('unlocked', 'locked');
                 doneBtn.classList.add('viewed');
@@ -558,6 +583,12 @@ function restoreProgress(saved) {
                 doneBtn.title = 'View your quiz results';
             }
             unlockModule(i + 1);
+        } else if (doneBtn) {
+            // Failed attempt — read-only review; retake is gated by the cooldown
+            doneBtn.classList.remove('locked');
+            doneBtn.classList.add('viewed');
+            doneBtn.textContent = 'VIEW';
+            doneBtn.title = 'View your quiz results';
         }
     });
 
@@ -566,6 +597,13 @@ function restoreProgress(saved) {
         var i = parseInt(k, 10);
         checkQuizUnlock(i);
         checkModuleComplete(i);
+    });
+
+    // Apply server-side retake cooldowns (persist across page changes)
+    Object.keys(_serverUnlocks || {}).forEach(function (k) {
+        if (retakeMsRemaining(k) > 0) {
+            try { localStorage.setItem(retakeKey(k), String(_serverUnlocks[k])); } catch (e) {}
+        }
     });
 
     updateProgress();
@@ -833,12 +871,15 @@ function handleQuizClick(modIdx) {
         alert('Please mark all lessons as complete before taking the quiz.');
         return;
     }
-    // If already submitted (viewed), open in read-only mode
-    const viewOnly = qbtn && qbtn.classList.contains('viewed');
     if (!QUIZ_DATA[modIdx] || !QUIZ_DATA[modIdx].questions || QUIZ_DATA[modIdx].questions.length === 0) {
         alert('No quiz has been added to this module yet.');
         return;
     }
+    // Already answered (passed OR failed) → always open read-only review.
+    // Retakes are only reachable through the Retake button, which the
+    // server-side 24h cooldown guards.
+    const viewOnly = (qbtn && qbtn.classList.contains('viewed'))
+        || (_moduleScores[modIdx] !== undefined);
     showQuizView(modIdx, viewOnly);
 }
 
@@ -1021,6 +1062,7 @@ function submitQuiz() {
         correctCount = totalCorrect;
     }
     _moduleScores[_curModIdx] = correctCount;
+    _pendingQuizSubmit = { modIdx: _curModIdx, correct: correctCount };
     updateProgress();
     saveProgress();
 
@@ -1061,7 +1103,14 @@ function submitQuiz() {
             reportCourseCompletion();
         }
     } else {
-        // ❌ FAILED → next module stays locked, offer retake after 24h cooldown
+        // ❌ FAILED → read-only review; retake unlocks after the 24h cooldown
+        const failBtn = document.getElementById('qbtn-' + _curModIdx);
+        if (failBtn) {
+            failBtn.classList.remove('unlocked');
+            failBtn.classList.add('viewed');
+            failBtn.textContent = 'VIEW';
+            failBtn.title = 'View your quiz results';
+        }
         startRetakeCooldown(_curModIdx);      // clock starts at the moment of failing
         showRetakeButton(_curModIdx);         // shows locked button with live countdown
     }
@@ -1102,10 +1151,14 @@ function clearRetakeCooldown(modIdx) {
 
 /* Milliseconds remaining until retake is allowed (0 = allowed now) */
 function retakeMsRemaining(modIdx) {
-    try {
-        const unlockAt = parseInt(localStorage.getItem(retakeKey(modIdx)) || '0', 10);
-        return Math.max(0, unlockAt - Date.now());
-    } catch (e) { return 0; }
+    let unlockAt = 0;
+    try { unlockAt = parseInt(localStorage.getItem(retakeKey(modIdx)) || '0', 10); } catch (e) {}
+    // The server-recorded cooldown always wins — it survives page changes,
+    // new devices and cleared browser storage.
+    if (_serverUnlocks && _serverUnlocks[modIdx] !== undefined) {
+        unlockAt = Math.max(unlockAt, parseInt(_serverUnlocks[modIdx], 10) || 0);
+    }
+    return Math.max(0, unlockAt - Date.now());
 }
 
 function formatCooldown(ms) {
@@ -1147,12 +1200,48 @@ function showRetakeButton(modIdx) {
 /* ── Retake quiz (wrong questions only) ───────────── */
 function retakeQuiz() {
     // Hard guard: ignore clicks while the 24h cooldown is still running
-    if (retakeMsRemaining(_curModIdx) > 0) return;
+    if (retakeMsRemaining(_curModIdx) > 0) {
+        showRetakeButton(_curModIdx);   // re-render the countdown
+        return;
+    }
 
-    if (_cooldownTimerId) { clearInterval(_cooldownTimerId); _cooldownTimerId = null; }
-    document.getElementById('btn-retake').style.display        = 'none';
-    document.getElementById('quiz-score-result').style.display = 'none';
-    showQuizView(_curModIdx, false, true);   // retakeOnly=true → only wrong questions shown
+    // Verify with the server before allowing the retake — the local clock
+    // alone can be bypassed, the quiz_attempts table cannot.
+    const modIdx = _curModIdx;
+    const btn = document.getElementById('btn-retake');
+    if (btn) btn.disabled = true;
+
+    fetch('{{ route('courses.progress', $course->id) }}', {
+        method: 'POST',
+        headers: {
+            'X-CSRF-TOKEN': '{{ csrf_token() }}',
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ retake_check: modIdx })
+    })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (data) {
+        if (btn) btn.disabled = false;
+        if (!data) return;
+
+        // Server says it's still locked → restore the countdown and stop
+        if (data.quiz_unlocks && data.quiz_unlocks[modIdx] && data.quiz_unlocks[modIdx] > Date.now()) {
+            _serverUnlocks[modIdx] = data.quiz_unlocks[modIdx];
+            try { localStorage.setItem(retakeKey(modIdx), String(data.quiz_unlocks[modIdx])); } catch (e) {}
+            showRetakeButton(modIdx);
+            return;
+        }
+
+        // Cooldown over → open the retake
+        if (_cooldownTimerId) { clearInterval(_cooldownTimerId); _cooldownTimerId = null; }
+        document.getElementById('btn-retake').style.display        = 'none';
+        document.getElementById('quiz-score-result').style.display = 'none';
+        showQuizView(modIdx, false, true);   // retakeOnly=true → only wrong questions shown
+    })
+    .catch(function () {
+        if (btn) btn.disabled = false;
+    });
 }
 
 /* ── Go to next module ────────────────────────────── */

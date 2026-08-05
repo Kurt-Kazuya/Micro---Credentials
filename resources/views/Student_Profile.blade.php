@@ -298,6 +298,15 @@
         background:none;border:none;color:#fff;opacity:.7;
         font-size:18px;cursor:pointer;padding:0 0 0 8px;line-height:1;
     }
+
+    /* ── Skills list (About Me) ── */
+    .skills-block{margin-top:16px;border-top:1px solid var(--line);padding-top:14px;display:flex;flex-direction:column;gap:12px;}
+    .skills-title{display:block;font-size:12px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--navy);margin-bottom:7px;}
+    .skills-chips{display:flex;flex-wrap:wrap;gap:7px;}
+    .skill-chip{display:inline-block;padding:5px 12px;border-radius:999px;font-size:12.5px;font-weight:600;}
+    .skill-chip-have{background:#e9ebfb;color:var(--navy);border:1px solid #c9cdf0;}
+    .skill-chip-want{background:#fdf3d7;color:var(--gold-dark);border:1px solid #f0dc9a;}
+    .skills-empty{font-size:12.5px;color:var(--muted);font-style:italic;}
 </style>
 </head>
 <body>
@@ -464,10 +473,10 @@
                                         {{ $user->location }}
                                     </span>
                                 @endif
-                                @if($user->user_code ?? null)
+                                @if($user->student_id ?? null)
                                     <span>
                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 9h12"/><path d="M6 13h8"/></svg>
-                                        {{ $user->user_code }}
+                                        {{ $user->student_id }}
                                     </span>
                                 @endif
                             </div>
@@ -508,6 +517,30 @@
                             <span class="value">{{ $user->bio }}</span>
                         </div>
                     @endif
+
+                    {{-- Skills list (from the About Me form) --}}
+                    <div class="skills-block">
+                        <div class="skills-group">
+                            <span class="skills-title">Skills I Have</span>
+                            <div class="skills-chips">
+                                @forelse ($user->skills_have ?? [] as $skill)
+                                    <span class="skill-chip skill-chip-have">{{ $skill }}</span>
+                                @empty
+                                    <span class="skills-empty">No skills listed yet.</span>
+                                @endforelse
+                            </div>
+                        </div>
+                        <div class="skills-group">
+                            <span class="skills-title">Skills I Want to Learn</span>
+                            <div class="skills-chips">
+                                @forelse ($user->skills_want ?? [] as $skill)
+                                    <span class="skill-chip skill-chip-want">{{ $skill }}</span>
+                                @empty
+                                    <span class="skills-empty">No learning goals listed yet.</span>
+                                @endforelse
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 {{-- Settings card --}}
@@ -624,15 +657,8 @@
 
                 {{-- ===== STUDENT ID ===== --}}
                 @php
-                    // Format: YY-LN-####
-                    //   YY   = last two digits of the year the account was created
-                    //   LN   = literal "LN"
-                    //   #### = stable 4-digit number derived from the user ID
-                    //          (deterministic so it never changes between page loads;
-                    //          ideally generate once in the controller and store on the users table)
-                    $idYear   = ($user->joined_at ?? $user->created_at ?? now())->format('y');
-                    $idDigits  = str_pad(($user->id ?? 0) * 7919 % 10000, 4, '0', STR_PAD_LEFT);
-                    $studentId = "{$idYear}-LN-{$idDigits}";
+                    // The student's real ID number stored on the users table.
+                    $studentId = $user->student_id ?? '—';
                 @endphp
                 <div class="panel-card">
                     <div class="panel-card-head">
@@ -793,9 +819,25 @@
                     </div>
 
                     <div class="form-group">
-                        <label for="edit_bio">Bio / Skills</label>
+                        <label for="edit_bio">Bio</label>
                         <textarea id="edit_bio" name="bio" rows="3"
-                            placeholder="List your skills, expertise, or career highlights…">{{ old('bio', $user->bio ?? '') }}</textarea>
+                            placeholder="Share a short bio…">{{ old('bio', $user->bio ?? '') }}</textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="edit_skills_have">Skills I Have</label>
+                        <input type="text" id="edit_skills_have" name="skills_have"
+                            value="{{ old('skills_have', implode(', ', $user->skills_have ?? [])) }}"
+                            placeholder="e.g. HTML, Public Speaking, Excel">
+                        <p class="hint">Separate skills with commas — shown on your profile skills list.</p>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="edit_skills_want">Skills I Want to Learn</label>
+                        <input type="text" id="edit_skills_want" name="skills_want"
+                            value="{{ old('skills_want', implode(', ', $user->skills_want ?? [])) }}"
+                            placeholder="e.g. Python, Data Analysis, Networking">
+                        <p class="hint">Used to personalize your course recommendations.</p>
                     </div>
                 </div>
 

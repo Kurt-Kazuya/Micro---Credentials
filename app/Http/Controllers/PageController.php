@@ -94,7 +94,7 @@ class PageController extends Controller
             ->map(function (User $u) {
                 return (object) [
                     'name'       => $u->name,
-                    'student_id' => $u->user_code ?? $u->student_id,
+                    'student_id' => $u->student_id ?? $u->user_code,
                     'avatar_url' => $u->avatar_url,
                     'courses'    => $u->enrollments->map(fn ($e) => [
                         'title'     => $e->course->title ?? 'Course',

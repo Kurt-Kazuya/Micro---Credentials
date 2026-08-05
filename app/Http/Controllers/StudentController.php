@@ -14,6 +14,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * StudentController — every Student_* page, now fed entirely from the
@@ -48,6 +49,15 @@ class StudentController extends Controller
             ->map(fn (UserBadge $ub) => (object) ['name' => $ub->badge->name ?? 'Badge'])
             ->values();
 
+        $progress = $enrollments
+            ->sortByDesc('updated_at')
+            ->map(fn (Enrollment $e) => (object) [
+                'title'            => $e->course->title ?? 'Course',
+                'progress_percent' => (int) $e->progress_percent,
+                'is_completed'     => (bool) $e->is_completed,
+                'completed_lessons'=> count((array) ($e->progress_state['completed_lessons'] ?? [])),
+            ])->values();
+
         return view('Student_dashboard', [
             'user'    => UserPresenter::student($auth),
             'stats'   => [
@@ -57,9 +67,72 @@ class StudentController extends Controller
                 'certificates'   => $auth->certificates()->count(),
             ],
             'courses'  => $courses,
-            'progress' => [],
+            'progress' => $progress,
             'badges'   => $badges,
+            'show_about_form' => ! (bool) ($auth->profile_completed ?? false),
         ]);
+    }
+
+    // ── First-login About Me ─────────────────────────────────────────────
+
+    public function completeProfile(Request $request)
+    {
+        $auth = Auth::user();
+
+        $data = $request->validate([
+            'date_of_birth' => ['required', 'date', 'before:today'],
+            'gender'        => ['required', 'string', 'max:50'],
+            'education'     => ['required', 'string', 'max:255'],
+            'bio'           => ['nullable', 'string', 'max:2000'],
+            'skills_have'   => ['nullable', 'string', 'max:1000'],
+            'skills_want'   => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $splitSkills = function (?string $raw): array {
+            return collect(preg_split('/[,;\n]+/', (string) $raw))
+                ->map(fn ($s) => trim($s))
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
+        };
+
+        $skillsHave = $splitSkills($data['skills_have'] ?? null);
+        $skillsWant = $splitSkills($data['skills_want'] ?? null);
+        $bio        = $data['bio'] ?? null;
+
+        $attrs = [
+            'date_of_birth'     => $data['date_of_birth'],
+            'gender'            => $data['gender'],
+            'education'         => $data['education'],
+            'bio'               => $bio,
+            'profile_completed' => true,
+        ];
+
+        if (Schema::hasColumn('users', 'skills_have') && Schema::hasColumn('users', 'skills_want')) {
+            // Preferred storage: dedicated JSON columns (run php artisan migrate).
+            $attrs['skills_have'] = $skillsHave;
+            $attrs['skills_want'] = $skillsWant;
+        } else {
+            // Fallback so onboarding never fails before the migration is run:
+            // keep the skills inside the existing bio text.
+            $extras = [];
+            if ($skillsHave !== []) {
+                $extras[] = 'Skills I have: ' . implode(', ', $skillsHave);
+            }
+            if ($skillsWant !== []) {
+                $extras[] = 'Skills I want to learn: ' . implode(', ', $skillsWant);
+            }
+            if ($extras !== []) {
+                $attrs['bio'] = trim(($bio ?? '') . ($bio ? "\n\n" : '') . implode("\n", $extras));
+            }
+        }
+
+        $auth->forceFill($attrs)->save();
+
+        return redirect()
+            ->route('dashboard')
+            ->with('success', 'Profile completed — your recommendations are now personalized.');
     }
 
     // ── Browse Courses ────────────────────────────────────────────────────
@@ -245,6 +318,32 @@ class StudentController extends Controller
         // exactly where they left off (completed lessons + quiz scores).
         $state = $enrollment?->progress_state ?? [];
 
+        // Server-side retake cooldowns: a failed quiz locks for 24 hours
+        // based on quiz_attempts, so it survives page changes, new devices
+        // and cleared browser storage.
+        $quizUnlocks = [];
+        foreach ($course->modules as $mIdx => $m) {
+            if (! $m->quiz) {
+                continue;
+            }
+            $failed = QuizAttempt::where('user_id', $auth->id)
+                ->where('quiz_id', $m->quiz->id)
+                ->where('passed', false)
+                ->latest('submitted_at')
+                ->first();
+            $passed = QuizAttempt::where('user_id', $auth->id)
+                ->where('quiz_id', $m->quiz->id)
+                ->where('passed', true)
+                ->exists();
+
+            if ($failed && ! $passed) {
+                $at = $failed->submitted_at ?? $failed->created_at;
+                if ($at && now()->diffInHours($at, false) < 24) {
+                    $quizUnlocks[(string) $mIdx] = $at->copy()->addHours(24)->getTimestamp() * 1000;
+                }
+            }
+        }
+
         return view('Student_Course_Enrollment', [
             'user'   => UserPresenter::student($auth),
             'course' => (object) [
@@ -264,6 +363,7 @@ class StudentController extends Controller
                 'completed_lessons' => array_values($state['completed_lessons'] ?? []),
                 'module_scores'     => (object) ($state['module_scores'] ?? []),
             ],
+            'quiz_unlocks'     => (object) $quizUnlocks,
         ]);
     }
 
@@ -298,6 +398,9 @@ class StudentController extends Controller
             'completed_lessons.*'  => 'string|max:20',
             'module_scores'        => 'nullable|array',
             'module_scores.*'      => 'integer|min:0',
+            'quiz_results'         => 'nullable|array',
+            'quiz_results.*.score' => 'nullable|integer|min:0',
+            'retake_check'         => 'nullable|integer|min:0',
         ]);
 
         $auth   = Auth::user();
@@ -307,6 +410,31 @@ class StudentController extends Controller
             ['user_id' => $auth->id, 'course_id' => $course->id],
             ['enrolled_at' => now(), 'progress_percent' => 0, 'is_completed' => false]
         );
+
+        // Retake availability check — answers whether the module's quiz may
+        // be retaken yet, without recording anything.
+        if (isset($data['retake_check'])) {
+            $module = $course->modules->get((int) $data['retake_check']);
+            $quiz   = $module?->quiz;
+            $unlock = null;
+            if ($quiz) {
+                $lastAttempt = QuizAttempt::where('user_id', $auth->id)
+                    ->where('quiz_id', $quiz->id)
+                    ->latest('submitted_at')
+                    ->first();
+                if ($lastAttempt && ! $lastAttempt->passed) {
+                    $at = $lastAttempt->submitted_at ?? $lastAttempt->created_at;
+                    if ($at && now()->diffInHours($at, false) < 24) {
+                        $unlock = $at->copy()->addHours(24)->getTimestamp() * 1000;
+                    }
+                }
+            }
+
+            return response()->json([
+                'ok'           => true,
+                'quiz_unlocks' => $unlock ? [(string) $data['retake_check'] => $unlock] : (object) [],
+            ]);
+        }
 
         $percent = (int) ($data['percent'] ?? 0);
 
@@ -338,6 +466,48 @@ class StudentController extends Controller
             ]);
         }
 
+        // Record quiz attempts server-side and enforce the 24-hour retake
+        // cooldown: a second submission inside the window is rejected and
+        // cannot create a new attempt (the browser lock can't be bypassed
+        // by reloading or switching devices).
+        $quizUnlocks = [];
+        foreach (($data['quiz_results'] ?? []) as $modIdx => $result) {
+            $module = $course->modules->get((int) $modIdx);
+            $quiz   = $module?->quiz;
+            if (! $quiz || $quiz->questions->count() === 0) {
+                continue;
+            }
+
+            $lastAttempt = QuizAttempt::where('user_id', $auth->id)
+                ->where('quiz_id', $quiz->id)
+                ->latest('submitted_at')
+                ->first();
+            if ($lastAttempt) {
+                $at = $lastAttempt->submitted_at ?? $lastAttempt->created_at;
+                if ($at && now()->diffInHours($at, false) < 24) {
+                    $quizUnlocks[(string) $modIdx] = $at->copy()->addHours(24)->getTimestamp() * 1000;
+                    continue;   // still cooling down — ignore this submission
+                }
+            }
+
+            $total   = $quiz->questions->count();
+            $correct = (int) ($result['score'] ?? 0);
+            $pct     = (int) round(($correct / $total) * 100);
+
+            QuizAttempt::create([
+                'user_id'      => $auth->id,
+                'quiz_id'      => $quiz->id,
+                'score'        => $pct,
+                'passed'       => $pct >= (int) $quiz->passing_score,
+                'started_at'   => now(),
+                'submitted_at' => now(),
+            ]);
+
+            if ($pct < (int) $quiz->passing_score) {
+                $quizUnlocks[(string) $modIdx] = now()->addHours(24)->getTimestamp() * 1000;
+            }
+        }
+
         $badgeAwarded = null;
         if ($percent >= 100) {
             $badgeAwarded = $this->finalizeCompletion($auth, $course, $enrollment);
@@ -347,6 +517,7 @@ class StudentController extends Controller
             'ok'            => true,
             'percent'       => (int) $enrollment->progress_percent,
             'badge_awarded' => $badgeAwarded,
+            'quiz_unlocks'  => (object) $quizUnlocks,
         ]);
     }
 
@@ -514,6 +685,8 @@ class StudentController extends Controller
             'gender'        => ['nullable', 'string', 'max:30'],
             'education'     => ['nullable', 'string', 'max:120'],
             'bio'           => ['nullable', 'string', 'max:600'],
+            'skills_have'   => ['nullable', 'string', 'max:1000'],
+            'skills_want'   => ['nullable', 'string', 'max:1000'],
             'email'         => ['required', 'email', 'max:120', 'unique:users,email,' . $auth->id],
             'language'      => ['nullable', 'string', 'max:40'],
             'timezone'      => ['nullable', 'string', 'max:60'],
@@ -543,6 +716,15 @@ class StudentController extends Controller
         $auth->gender      = $data['gender'] ?? null;
         $auth->education   = $data['education'] ?? null;
         $auth->bio         = $data['bio'] ?? null;
+        $splitSkills = function (?string $raw): array {
+            return collect(preg_split('/[,;\n]+/', (string) $raw))->map(fn ($s) => trim($s))->filter()->unique()->values()->all();
+        };
+        if (array_key_exists('skills_have', $data)) {
+            $auth->skills_have = $splitSkills($data['skills_have']);
+        }
+        if (array_key_exists('skills_want', $data)) {
+            $auth->skills_want = $splitSkills($data['skills_want']);
+        }
         $auth->language    = $data['language'] ?? null;
         $auth->timezone    = $data['timezone'] ?? null;
 
@@ -589,6 +771,8 @@ class StudentController extends Controller
         // Skills/competencies earned from completed courses (skills + category + title keywords)
         $competencies = $completed
             ->flatMap(fn ($e) => collect($e->course->skills ?? [])->concat([$e->course->category])->filter())
+            ->merge($auth->skills_have ?? [])   // self-declared skills from About Me
+            ->filter()
             ->unique()
             ->values();
 
@@ -627,7 +811,7 @@ class StudentController extends Controller
         }
 
         // ── Smart recommendations ────────────────────────────────────────
-        $recommendations = $this->buildRecommendations($auth, $enrollments, $missingComps, $pathway);
+        $recommendations = $this->buildRecommendations($auth, $enrollments, $missingComps, $pathway, $auth->skills_want ?? []);
 
         return view('Student_MyPathways', [
             'user'    => UserPresenter::student($auth),
@@ -659,7 +843,8 @@ class StudentController extends Controller
             return (object) [];
         }
 
-        $haystack = strtolower($enrollments->map(fn ($e) => ($e->course->title ?? '') . ' ' . ($e->course->category ?? '') . ' ' . implode(' ', $e->course->skills ?? []))->implode(' '));
+        $skillsWantText = collect(Auth::user()->skills_want ?? [])->implode(' ');
+        $haystack = strtolower($enrollments->map(fn ($e) => ($e->course->title ?? '') . ' ' . ($e->course->category ?? '') . ' ' . implode(' ', $e->course->skills ?? []))->implode(' ') . ' ' . $skillsWantText);
 
         $best  = $pathways->first();
         $score = -1;
@@ -708,7 +893,7 @@ class StudentController extends Controller
      * competency gaps, how popular it is, and how relevant its skills are —
      * and reports the student's real completion for in-progress picks.
      */
-    private function buildRecommendations($auth, $enrollments, $missingComps, $pathway): array
+    private function buildRecommendations($auth, $enrollments, $missingComps, $pathway, array $skillsWant = []): array
     {
         $doneIds   = $enrollments->where('is_completed', true)->pluck('course_id');
         $activeMap = $enrollments->where('is_completed', false)->keyBy('course_id');
@@ -717,7 +902,7 @@ class StudentController extends Controller
             ->whereNotIn('id', $doneIds)
             ->get();
 
-        $scored = $candidates->map(function ($course) use ($missingComps, $activeMap, $pathway) {
+        $scored = $candidates->map(function ($course) use ($missingComps, $activeMap, $pathway, $skillsWant) {
             $text = strtolower($course->title . ' ' . ($course->category ?? '') . ' ' . implode(' ', $course->skills ?? []));
 
             $score = 0;
@@ -732,6 +917,13 @@ class StudentController extends Controller
                 foreach (preg_split('/\s+/', strtolower($kw)) as $word) {
                     if (strlen($word) > 3 && str_contains($text, $word)) {
                         $score += 2;   // aligned with the desired pathway
+                    }
+                }
+            }
+            foreach ($skillsWant as $skill) {
+                foreach (preg_split('/\s+/', strtolower((string) $skill)) as $word) {
+                    if (strlen($word) > 3 && str_contains($text, $word)) {
+                        $score += 4;   // student explicitly wants to learn this
                     }
                 }
             }

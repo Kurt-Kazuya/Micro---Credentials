@@ -46,6 +46,8 @@ class User extends Authenticatable
         'education',
         'about',
         'bio',
+        'skills_have',
+        'skills_want',
         'language',
         'timezone',
         'profile_completed',
@@ -82,6 +84,8 @@ class User extends Authenticatable
             'password'          => 'hashed',
             'is_active'         => 'boolean',
             'profile_completed' => 'boolean',
+            'skills_have'        => 'array',
+            'skills_want'        => 'array',
         ];
     }
 
