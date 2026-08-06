@@ -238,6 +238,31 @@
         }
         .modules-empty { color: var(--text-sub); font-size: 0.86rem; }
 
+        /* Expandable lesson / quiz details (admin view) */
+        .lesson-toggle, .quiz-toggle { cursor: pointer; }
+        .lesson-toggle::before { content: '▸'; margin-right: 8px; color: var(--text-sub); font-size: 0.8rem; }
+        .quiz-toggle::before { content: '▸'; margin-right: 8px; }
+        .lesson-detail, .quiz-detail {
+            display: none; margin: -2px 0 8px; padding: 10px 14px 12px 26px;
+            background: #fff; border: 1px dashed var(--border); border-radius: 0 0 8px 8px;
+            font-size: 0.82rem; color: var(--text-sub);
+        }
+        .lesson-detail.open, .quiz-detail.open { display: block; }
+        .lesson-desc { margin: 0 0 6px; line-height: 1.5; }
+        .lesson-empty { font-style: italic; margin: 0; }
+        .lesson-file { display: inline-block; color: var(--navy); font-weight: 700; text-decoration: underline; }
+        .quiz-detail { border-color: #fde9c0; }
+        .quiz-instructions { margin: 0 0 10px; font-style: italic; }
+        .quiz-question { border-top: 1px solid #f3e8cf; padding: 8px 0; }
+        .quiz-question:first-of-type { border-top: none; }
+        .quiz-question-head { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
+        .quiz-question-text { font-weight: 700; color: var(--navy); }
+        .quiz-question-meta { white-space: nowrap; font-size: 0.74rem; color: var(--text-sub); }
+        .quiz-options { margin: 4px 0 0; padding-left: 18px; list-style: none; }
+        .quiz-options li { padding: 2px 0; }
+        .quiz-options li.is-correct { color: #15803d; font-weight: 700; }
+        .quiz-answer { margin-top: 4px; color: #15803d; }
+
         .progress-track { height: 6px; background: #e4e8f5; border-radius: 4px; overflow: hidden; margin-bottom: 8px; }
         .progress-fill { height: 100%; background: var(--teal-bar); border-radius: 4px; }
         .pct { font-size: 0.82rem; font-weight: 700; color: var(--navy); }
@@ -427,16 +452,50 @@
                 @endif
 
                 @foreach ($module->lessons as $lesson)
-                    <div class="lesson-row">
+                    <div class="lesson-row lesson-toggle" onclick="this.nextElementSibling.classList.toggle('open')">
                         <span>{{ $lesson->title }}</span>
                         <span class="lesson-meta">{{ $lesson->type }}{{ $lesson->duration ? ' · ' . $lesson->duration : '' }}</span>
+                    </div>
+                    <div class="lesson-detail">
+                        @if ($lesson->description)
+                            <p class="lesson-desc">{{ $lesson->description }}</p>
+                        @endif
+                        @if ($lesson->file_url)
+                            <a class="lesson-file" href="{{ $lesson->file_url }}" target="_blank" rel="noopener">Open attached file ({{ $lesson->file_name }})</a>
+                        @elseif (! $lesson->description)
+                            <p class="lesson-desc lesson-empty">No description or file attached.</p>
+                        @endif
                     </div>
                 @endforeach
 
                 @if ($module->quiz)
-                    <div class="quiz-row">
+                    <div class="quiz-row quiz-toggle" onclick="this.nextElementSibling.classList.toggle('open')">
                         <span>Quiz: {{ $module->quiz->title }}</span>
-                        <span>{{ $module->quiz->questions_count }} Questions · Pass {{ $module->quiz->passing_score }}%</span>
+                        <span>{{ $module->quiz->questions_count }} Questions · Pass {{ $module->quiz->passing_score }}%{{ $module->quiz->time_limit ? ' · ' . $module->quiz->time_limit . ' min' : '' }}</span>
+                    </div>
+                    <div class="quiz-detail">
+                        @if ($module->quiz->instructions)
+                            <p class="quiz-instructions">{{ $module->quiz->instructions }}</p>
+                        @endif
+                        @foreach ($module->quiz->questions as $qi => $q)
+                            <div class="quiz-question">
+                                <div class="quiz-question-head">
+                                    <span class="quiz-question-text">Q{{ $qi + 1 }}. {{ $q->question }}</span>
+                                    <span class="quiz-question-meta">{{ $q->type }}{{ $q->points ? ' · ' . $q->points . ' pts' : '' }}</span>
+                                </div>
+                                @if (! empty($q->options))
+                                    <ul class="quiz-options">
+                                        @foreach ($q->options as $oi => $opt)
+                                            <li class="{{ $opt === $q->correct_answer ? 'is-correct' : '' }}">
+                                                {{ chr(65 + $oi) }}. {{ $opt }}@if ($opt === $q->correct_answer) — correct @endif
+                                            </li>
+                                        @endforeach
+                                    </ul>
+                                @elseif ($q->correct_answer)
+                                    <div class="quiz-answer">Answer: <strong>{{ $q->correct_answer }}</strong></div>
+                                @endif
+                            </div>
+                        @endforeach
                     </div>
                 @endif
             </div>
@@ -463,5 +522,27 @@
     }
 </script>
 
+
+{{-- ── Back to top (appears on long pages) ── --}}
+<button id="back-to-top-btn" type="button" title="Back to top" aria-label="Back to top"
+        onclick="window.scrollTo({top:0,behavior:'smooth'});">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>
+</button>
+<style>
+    #back-to-top-btn{position:fixed;right:26px;bottom:26px;z-index:2000;width:48px;height:48px;border-radius:50%;border:none;background:#13176b;color:#fff;display:none;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 10px 22px rgba(19,23,107,.35);transition:transform .15s ease,background .2s ease;}
+    #back-to-top-btn:hover{background:#dba617;transform:translateY(-3px);}
+    #back-to-top-btn svg{width:22px;height:22px;}
+</style>
+<script>
+    (function () {
+        var btn = document.getElementById('back-to-top-btn');
+        if (!btn) return;
+        function toggleBackToTop() {
+            btn.style.display = (window.scrollY || document.documentElement.scrollTop) > 400 ? 'flex' : 'none';
+        }
+        window.addEventListener('scroll', toggleBackToTop, { passive: true });
+        toggleBackToTop();
+    })();
+</script>
 </body>
 </html>

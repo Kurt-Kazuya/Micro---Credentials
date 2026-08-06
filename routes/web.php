@@ -108,6 +108,10 @@ Route::middleware(RoleBasedAccess::class . ':admin')->group(function () {
         ->whereNumber('id')->name('admin.courses.deny');
     Route::post('/Admin-courses/{id}/delete', [AdminController::class, 'destroyCourse'])
         ->whereNumber('id')->name('admin.courses.destroy');
+    Route::post('/Admin-courses/{id}/publish', [AdminController::class, 'togglePublishCourse'])
+        ->whereNumber('id')->name('admin.courses.publish');
+    Route::post('/Admin-courses/{id}/feature', [AdminController::class, 'toggleFeatureCourse'])
+        ->whereNumber('id')->name('admin.courses.feature');
     Route::get('/Admin-report', [AdminController::class, 'report'])->name('admin.report');
 });
 
@@ -132,6 +136,7 @@ Route::middleware(RoleBasedAccess::class . ':student')->group(function () {
         ->whereNumber('courseId')->whereNumber('lessonId')->name('courses.lesson');
     Route::get('/quiz/{id}', [StudentController::class, 'quiz'])->whereNumber('id')->name('quiz.show');
 
+    Route::get('/courses/enrolled', [StudentController::class, 'enrolledCourses'])->name('courses.enrolled');
     Route::get('/badges', [StudentController::class, 'badges'])->name('badges.index');
     Route::get('/certificates', [StudentController::class, 'certificates'])->name('certificates.index');
 

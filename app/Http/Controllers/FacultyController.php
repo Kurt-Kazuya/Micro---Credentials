@@ -440,7 +440,7 @@ class FacultyController extends Controller
             'passing_score'   => (int) ($data['passing_score'] ?? 75),
             'instructor'      => $auth->name,
             'created_by'      => $auth->id,
-            'is_featured'     => $request->boolean('feature_homepage'),
+            'is_featured'     => false,   // only the admin can feature a course on the homepage
             'thumbnail_url'   => $thumbnailUrl,
             'is_published'    => false,
             'approval_status' => ($data['status'] ?? 'submit') === 'draft' ? 'draft' : 'pending',

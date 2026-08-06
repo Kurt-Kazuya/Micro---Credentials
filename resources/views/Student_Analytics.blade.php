@@ -128,6 +128,16 @@
 
     .bottom-row{display:grid;grid-template-columns:1fr 1fr;gap:28px;}
 
+    /* Completion Rate circle + course dropdown */
+    .completion-select{border:1.5px solid var(--line);border-radius:10px;padding:7px 10px;font-size:12.5px;font-weight:700;color:var(--navy);max-width:230px;font-family:inherit;outline:none;cursor:pointer;}
+    .completion-select:focus{border-color:var(--gold);}
+    .completion-circle-wrap{display:flex;flex-direction:column;align-items:center;padding:18px 0 8px;gap:14px;}
+    .completion-circle{width:160px;height:160px;border-radius:50%;display:flex;align-items:center;justify-content:center;transition:background .3s ease;}
+    .completion-circle-inner{width:118px;height:118px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;box-shadow:inset 0 0 0 1px var(--line);}
+    .completion-circle-num{font-size:30px;font-weight:800;color:var(--navy);}
+    .completion-circle-label{font-size:13.5px;font-weight:700;color:var(--muted);text-align:center;max-width:280px;}
+    .course-pct-badge.course-pct-done{background:#e8f7ef;color:var(--green);}
+
     .empty-state{color:var(--muted);font-size:14px;}
 
     @media (max-width:980px){
@@ -196,6 +206,12 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
             </span>
             Browse Courses
+        </a>
+        <a href="{{ route('courses.enrolled') }}" class="side-link {{ request()->routeIs('courses.enrolled') ? 'active' : '' }}">
+            <span class="side-icon-box">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg>
+            </span>
+            Enrolled Courses
         </a>
         <a href="{{ route('badges.index') }}" class="side-link {{ request()->routeIs('badges.*') ? 'active' : '' }}">
             <span class="side-icon-box">
@@ -313,37 +329,53 @@
 
         </div>
 
-        {{-- Enrollment by Course + Completion Rate --}}
+        {{-- Enrolled Courses (completed) + Completion Rate --}}
         <div class="bottom-row">
 
             <div class="panel">
                 <div class="panel-head-row">
-                    <h3>Enrollment by Courses</h3>
+                    <h3>Enrolled Courses</h3>
                 </div>
-                @forelse (($enrollmentByCourse ?? []) as $row)
-                    @php /** @var object{label:string,value:int|float,percent:int|float} $row */ @endphp
-                    <div class="metric-row">
-                        <div class="label">{{ $row->label }} -{{ $row->value }}</div>
-                        <div class="metric-track"><div class="metric-fill" style="width:{{ $row->percent }}%"></div></div>
+                @forelse (($enrolledCourses ?? []) as $course)
+                    @php /** @var object{title:string,meta:?string,thumbnail_url:?string,percent:int|float} $course */ @endphp
+                    <div class="course-line">
+                        <div class="course-thumb-sm" @if($course->thumbnail_url ?? null) style="background-image:url('{{ $course->thumbnail_url }}')" @endif></div>
+                        <div class="course-line-info">
+                            <div class="title">{{ $course->title }}</div>
+                            <div class="meta">{{ $course->meta ?? '' }}</div>
+                        </div>
+                        <span class="course-pct-badge course-pct-done">{{ $course->percent }}%</span>
                     </div>
                 @empty
-                    <p class="empty-state">No enrollment data yet.</p>
+                    <p class="empty-state">No completed courses yet — courses you finish (100%) will move here automatically.</p>
                 @endforelse
             </div>
 
             <div class="panel">
                 <div class="panel-head-row">
                     <h3>Completion Rate</h3>
+                    @if (($completionCourses ?? collect())->isNotEmpty())
+                        <select id="completion-course-select" class="completion-select" onchange="showCompletionRate(this.selectedIndex)">
+                            @foreach ($completionCourses as $cc)
+                                <option value="{{ $cc->percent }}">{{ $cc->title }} — {{ $cc->percent }}%</option>
+                            @endforeach
+                        </select>
+                    @endif
                 </div>
-                @forelse (($completionRate ?? []) as $row)
-                    @php /** @var object{label:string,value:int|float,percent:int|float} $row */ @endphp
-                    <div class="metric-row">
-                        <div class="label">{{ $row->label }} - {{ $row->value }}%</div>
-                        <div class="metric-track"><div class="metric-fill" style="width:{{ $row->percent }}%"></div></div>
+                @if (($completionCourses ?? collect())->isNotEmpty())
+                    <div class="completion-circle-wrap">
+                        @php $firstPct = (int) ($completionCourses->first()->percent ?? 0); @endphp
+                        <div class="completion-circle" id="completion-circle"
+                             style="background: conic-gradient(var(--green) {{ $firstPct * 3.6 }}deg, #e3e6f0 0deg);">
+                            <div class="completion-circle-inner">
+                                <span class="completion-circle-num" id="completion-circle-num">{{ $firstPct }}%</span>
+                            </div>
+                        </div>
+                        <div class="completion-circle-label" id="completion-circle-label">{{ $completionCourses->first()->title }}</div>
                     </div>
-                @empty
+                @else
                     <p class="empty-state">No completion data yet.</p>
-                @endforelse
+                @endif
             </div>
 
         </div>
@@ -351,5 +383,43 @@
     </main>
 </div>
 
+
+{{-- ── Back to top (appears on long pages) ── --}}
+<button id="back-to-top-btn" type="button" title="Back to top" aria-label="Back to top"
+        onclick="window.scrollTo({top:0,behavior:'smooth'});">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>
+</button>
+<style>
+    #back-to-top-btn{position:fixed;right:26px;bottom:26px;z-index:2000;width:48px;height:48px;border-radius:50%;border:none;background:#13176b;color:#fff;display:none;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 10px 22px rgba(19,23,107,.35);transition:transform .15s ease,background .2s ease;}
+    #back-to-top-btn:hover{background:#dba617;transform:translateY(-3px);}
+    #back-to-top-btn svg{width:22px;height:22px;}
+</style>
+<script>
+    (function () {
+        var btn = document.getElementById('back-to-top-btn');
+        if (!btn) return;
+        function toggleBackToTop() {
+            btn.style.display = (window.scrollY || document.documentElement.scrollTop) > 400 ? 'flex' : 'none';
+        }
+        window.addEventListener('scroll', toggleBackToTop, { passive: true });
+        toggleBackToTop();
+    })();
+</script>
+
+<script>
+    (function () {
+        var titles = {!! ($completionCourses ?? collect())->pluck('title')->toJson(JSON_HEX_TAG|JSON_HEX_APOS|JSON_HEX_QUOT|JSON_HEX_AMP) !!};
+        var pcts   = {!! ($completionCourses ?? collect())->pluck('percent')->toJson() !!};
+        window.showCompletionRate = function (i) {
+            var pct = Math.max(0, Math.min(100, parseInt(pcts[i], 10) || 0));
+            var circle = document.getElementById('completion-circle');
+            var num    = document.getElementById('completion-circle-num');
+            var label  = document.getElementById('completion-circle-label');
+            if (circle) circle.style.background = 'conic-gradient(var(--green) ' + (pct * 3.6) + 'deg, #e3e6f0 0deg)';
+            if (num)    num.textContent = pct + '%';
+            if (label)  label.textContent = titles[i] || '';
+        };
+    })();
+</script>
 </body>
 </html>

@@ -123,6 +123,11 @@
         .content-grid{grid-template-columns:1fr;}
     }
 
+    /* ── Course areas (Not Yet Completed / Completed Courses) ── */
+    .courses-area-title{margin:20px 0 12px;font-size:15px;font-weight:800;color:var(--navy);letter-spacing:.3px;}
+    .empty-state-slim{padding:10px 2px 4px;}
+    .btn-start.btn-completed{background:var(--green, #15803d);}
+
     /* ── Progress panel items ── */
     .prog-item{margin-bottom:16px;}
     .prog-item:last-child{margin-bottom:0;}
@@ -152,6 +157,20 @@
     .am-actions{display:flex;gap:10px;margin-top:18px;}
     .am-save{flex:1;background:var(--gold);color:#fff;border:none;border-radius:12px;padding:12px;font-size:14px;font-weight:800;cursor:pointer;letter-spacing:.3px;transition:background .2s;}
     .am-save:hover{background:var(--gold-dark);}
+    /* Skills checkbox dropdown */
+    .skill-select{position:relative;}
+    .skill-select-toggle{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;border:1.5px solid var(--line);border-radius:10px;padding:9px 12px;font-size:13.5px;background:#fff;color:var(--ink);cursor:pointer;text-align:left;}
+    .skill-select-toggle:hover{border-color:var(--gold);}
+    .skill-select.open .skill-select-toggle{border-color:var(--gold);}
+    .skill-select-label{color:var(--muted);}
+    .skill-select.has-value .skill-select-label{color:var(--ink);font-weight:600;}
+    .skill-select-caret{color:var(--muted);font-size:12px;transition:transform .2s;}
+    .skill-select.open .skill-select-caret{transform:rotate(180deg);}
+    .skill-select-menu{display:none;position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:50;background:#fff;border:1.5px solid var(--line);border-radius:12px;box-shadow:0 14px 34px rgba(19,23,107,.18);max-height:220px;overflow-y:auto;padding:8px;}
+    .skill-select.open .skill-select-menu{display:block;}
+    .skill-option{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;font-size:13.5px;color:var(--ink);cursor:pointer;}
+    .skill-option:hover{background:#f4f6fd;}
+    .skill-option input{width:16px;height:16px;accent-color:var(--navy);cursor:pointer;flex-shrink:0;}
     @media (max-width:560px){.am-row{grid-template-columns:1fr;}}
 </style>
 </head>
@@ -211,6 +230,12 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
             </span>
             Browse Courses
+        </a>
+        <a href="{{ route('courses.enrolled') }}" class="side-link {{ request()->routeIs('courses.enrolled') ? 'active' : '' }}">
+            <span class="side-icon-box">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg>
+            </span>
+            Enrolled Courses
         </a>
         <a href="{{ route('badges.index') }}" class="side-link {{ request()->routeIs('badges.*') ? 'active' : '' }}">
             <span class="side-icon-box">
@@ -299,7 +324,20 @@
                     <a href="{{ route('courses.browse') }}" class="enroll-more">+ Enroll More</a>
                 </div>
 
-                @forelse ($courses as $course)
+                @php
+                    $inProgressCourses = $inProgressCourses ?? collect();
+                    $completedCourses  = $completedCourses ?? collect();
+                @endphp
+
+                @if ($inProgressCourses->isEmpty() && $completedCourses->isEmpty())
+                    <div class="empty-state">
+                        You haven't enrolled in any courses yet.
+                        <br>
+                        <a href="{{ route('courses.browse') }}" class="enroll-more">Browse courses to get started</a>
+                    </div>
+                @else
+                    <h4 class="courses-area-title">Not Yet Completed</h4>
+                    @forelse ($inProgressCourses as $course)
                     <div class="course-card">
                         <div class="thumb" @if($course->thumbnail_url) style="background-image:url('{{ $course->thumbnail_url }}')" @endif></div>
                         <div class="course-info">
@@ -318,13 +356,32 @@
                             </button>
                         </a>
                     </div>
-                @empty
-                    <div class="empty-state">
-                        You haven't enrolled in any courses yet.
-                        <br>
-                        <a href="{{ route('courses.browse') }}" class="enroll-more">Browse courses to get started</a>
+                    @empty
+                        <div class="empty-state empty-state-slim">Nothing in progress right now.</div>
+                    @endforelse
+
+                    <h4 class="courses-area-title">Completed Courses</h4>
+                    @forelse ($completedCourses as $course)
+                    <div class="course-card">
+                        <div class="thumb" @if($course->thumbnail_url) style="background-image:url('{{ $course->thumbnail_url }}')" @endif></div>
+                        <div class="course-info">
+                            <h4>{{ $course->title }}</h4>
+                            @if($course->category)
+                                <div class="cat">{{ $course->category }}</div>
+                            @endif
+                            <div class="progress-track">
+                                <div class="progress-fill" style="width:{{ $course->progress_percent ?? 0 }}%"></div>
+                            </div>
+                            <div class="pct">{{ $course->progress_percent ?? 0 }}% Complete</div>
+                        </div>
+                        <a href="{{ route('courses.show', $course->id) }}">
+                            <button class="btn-start btn-completed" type="button">Review</button>
+                        </a>
                     </div>
-                @endforelse
+                    @empty
+                        <div class="empty-state empty-state-slim">No completed courses yet — finish a course and it will appear here.</div>
+                    @endforelse
+                @endif
             </section>
 
             <aside class="side-col">
@@ -427,14 +484,51 @@
                     <label for="am-bio">Bio</label>
                     <textarea id="am-bio" name="bio" placeholder="A short introduction about yourself…">{{ old('bio') }}</textarea>
                 </div>
+                @php
+                    $skillOptions = $skill_options ?? [
+                        'HTML', 'CSS', 'JavaScript', 'Python', 'Java', 'PHP', 'SQL',
+                        'Computer Networking', 'Video Editing', 'Photo Editing', 'Graphic Design',
+                        'Data Analysis', 'Excel', 'Digital Marketing', 'Writing', 'Public Speaking',
+                        'Communication', 'Leadership', 'Singing', 'Dancing', 'Drawing', 'Cooking',
+                        'Hacking', 'Baking',
+                    ];
+                    $oldHave = (array) old('skills_have', []);
+                    $oldWant = (array) old('skills_want', []);
+                @endphp
                 <div class="am-field">
-                    <label for="am-have">Skills You already Have?</label>
-                    <input type="text" id="am-have" name="skills_have" value="{{ old('skills_have') }}" placeholder="e.g. HTML, Public Speaking, Excel">
-                    <div class="am-hint">Separate skills with commas. These will also appear on your Profile skills list.</div>
+                    <label>Skills You already Have?</label>
+                    <div class="skill-select" data-skill-select>
+                        <button type="button" class="skill-select-toggle" onclick="toggleSkillSelect(this)">
+                            <span class="skill-select-label" data-placeholder="Choose your skills…">{{ count($oldHave) ? count($oldHave) . ' selected' : 'Choose your skills…' }}</span>
+                            <span class="skill-select-caret">▾</span>
+                        </button>
+                        <div class="skill-select-menu">
+                            @foreach ($skillOptions as $skill)
+                                <label class="skill-option">
+                                    <input type="checkbox" name="skills_have[]" value="{{ $skill }}" {{ in_array($skill, $oldHave) ? 'checked' : '' }}>
+                                    <span>{{ $skill }}</span>
+                                </label>
+                            @endforeach
+                        </div>
+                    </div>
+                    <div class="am-hint">Tick all that apply. These will also appear on your Profile skills list.</div>
                 </div>
                 <div class="am-field">
-                    <label for="am-want">Skills You want to learn</label>
-                    <input type="text" id="am-want" name="skills_want" value="{{ old('skills_want') }}" placeholder="e.g. Python, Data Analysis, Networking">
+                    <label>Skills You want to learn</label>
+                    <div class="skill-select" data-skill-select>
+                        <button type="button" class="skill-select-toggle" onclick="toggleSkillSelect(this)">
+                            <span class="skill-select-label" data-placeholder="Choose skills to learn…">{{ count($oldWant) ? count($oldWant) . ' selected' : 'Choose skills to learn…' }}</span>
+                            <span class="skill-select-caret">▾</span>
+                        </button>
+                        <div class="skill-select-menu">
+                            @foreach ($skillOptions as $skill)
+                                <label class="skill-option">
+                                    <input type="checkbox" name="skills_want[]" value="{{ $skill }}" {{ in_array($skill, $oldWant) ? 'checked' : '' }}>
+                                    <span>{{ $skill }}</span>
+                                </label>
+                            @endforeach
+                        </div>
+                    </div>
                     <div class="am-hint">We use this to recommend the most suitable courses for you.</div>
                 </div>
                 <div class="am-actions">
@@ -446,5 +540,55 @@
 </div>
 @endif
 
+
+{{-- ── Back to top (appears on long pages) ── --}}
+<button id="back-to-top-btn" type="button" title="Back to top" aria-label="Back to top"
+        onclick="window.scrollTo({top:0,behavior:'smooth'});">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>
+</button>
+<style>
+    #back-to-top-btn{position:fixed;right:26px;bottom:26px;z-index:2000;width:48px;height:48px;border-radius:50%;border:none;background:#13176b;color:#fff;display:none;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 10px 22px rgba(19,23,107,.35);transition:transform .15s ease,background .2s ease;}
+    #back-to-top-btn:hover{background:#dba617;transform:translateY(-3px);}
+    #back-to-top-btn svg{width:22px;height:22px;}
+</style>
+<script>
+    (function () {
+        var btn = document.getElementById('back-to-top-btn');
+        if (!btn) return;
+        function toggleBackToTop() {
+            btn.style.display = (window.scrollY || document.documentElement.scrollTop) > 400 ? 'flex' : 'none';
+        }
+        window.addEventListener('scroll', toggleBackToTop, { passive: true });
+        toggleBackToTop();
+    })();
+</script>
+
+<script>
+    // ── Skills checkbox dropdowns (About Me form) ──
+    function toggleSkillSelect(btn) {
+        var sel = btn.closest('[data-skill-select]');
+        if (!sel) return;
+        var wasOpen = sel.classList.contains('open');
+        document.querySelectorAll('[data-skill-select].open').forEach(function (s) { s.classList.remove('open'); });
+        if (!wasOpen) sel.classList.add('open');
+    }
+    function updateSkillSelectLabel(sel) {
+        var n = sel.querySelectorAll('input[type="checkbox"]:checked').length;
+        var label = sel.querySelector('.skill-select-label');
+        if (label) label.textContent = n ? n + ' selected' : (label.dataset.placeholder || 'Choose…');
+        sel.classList.toggle('has-value', n > 0);
+    }
+    document.querySelectorAll('[data-skill-select]').forEach(function (sel) {
+        sel.querySelectorAll('input[type="checkbox"]').forEach(function (cb) {
+            cb.addEventListener('change', function () { updateSkillSelectLabel(sel); });
+        });
+        updateSkillSelectLabel(sel);
+    });
+    document.addEventListener('click', function (e) {
+        document.querySelectorAll('[data-skill-select].open').forEach(function (sel) {
+            if (!sel.contains(e.target)) sel.classList.remove('open');
+        });
+    });
+</script>
 </body>
 </html>

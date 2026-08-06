@@ -566,14 +566,24 @@
                 </div>
             </div>
 
-            {{-- Questions — one card each · ✅ Add Question appends a fresh card --}}
+            {{-- Questions — for a NEW quiz the containers are generated after
+                 clicking "Create Quiz"; the count follows "No. of Items" --}}
             @php
                 $questions = $quiz->questions ?? [];
-                if (empty($questions)) {
-                    $questions = [['text' => '', 'type' => 'Multiple Choice', 'points' => null, 'choices' => [], 'correct' => null]];
-                }
+                $isNewQuiz = empty($questions);
             @endphp
 
+            @if ($isNewQuiz)
+            <div class="quiz-card" id="create-quiz-intro" style="text-align:center;">
+                <p style="margin:0 0 16px;color:var(--muted);font-size:14px;">
+                    Set the quiz details above — especially <strong>No. of Items</strong> — then click
+                    <strong>Create Quiz</strong>. One question container will be created per item.
+                </p>
+                <button class="btn-save-lesson" type="button" onclick="createQuizQuestions()">Create Quiz</button>
+            </div>
+            @endif
+
+            <div id="questions-area" style="display:{{ $isNewQuiz ? 'none' : 'block' }};">
             <div id="questions">
                 @foreach ($questions as $q => $question)
                     <div class="quiz-card question-card">
@@ -650,8 +660,9 @@
 
             {{-- ✅ Adds another fresh Question card --}}
             <button class="btn-add-choice" type="button" style="margin-bottom:26px;" onclick="addQuestion()">+ Add Question</button>
+            </div>{{-- /questions-area --}}
 
-            <div class="save-quiz-row">
+            <div class="save-quiz-row" id="save-quiz-row" style="display:{{ $isNewQuiz ? 'none' : 'flex' }};">
                 <button class="btn-save-lesson" type="submit">Save Quiz</button>
             </div>
         </form>
@@ -751,6 +762,31 @@
     // Next unused question index (indices never repeat, even after removals)
     var nextQuestionIndex = document.querySelectorAll('#questions .question-card').length;
 
+    // ── "Create Quiz" — builds exactly N question containers, where N is the
+    //    value of the "No. of Items" field (5 items → 5 question cards) ──
+    function createQuizQuestions() {
+        var itemsInput = document.querySelector('input[name="items"]');
+        var n = parseInt(itemsInput && itemsInput.value, 10);
+        if (!n || n < 1) {
+            alert('Please set the "No. of Items" first (at least 1) before creating the quiz.');
+            if (itemsInput) itemsInput.focus();
+            return;
+        }
+        if (n > 100) n = 100;
+
+        var wrap = document.getElementById('questions');
+        if (wrap) wrap.innerHTML = '';
+        nextQuestionIndex = 0;
+        for (var i = 0; i < n; i++) addQuestion();
+
+        var intro = document.getElementById('create-quiz-intro');
+        if (intro) intro.style.display = 'none';
+        var area = document.getElementById('questions-area');
+        if (area) area.style.display = 'block';
+        var saveRow = document.getElementById('save-quiz-row');
+        if (saveRow) saveRow.style.display = 'flex';
+    }
+
     // ✅ Swaps the question card's display to match the chosen Type
     function questionTypeChanged(sel) {
         var card = sel.closest('.question-card');
@@ -836,6 +872,28 @@
             h.textContent = 'Question ' + (i + 1);
         });
     }
+</script>
+
+{{-- ── Back to top (appears on long pages) ── --}}
+<button id="back-to-top-btn" type="button" title="Back to top" aria-label="Back to top"
+        onclick="window.scrollTo({top:0,behavior:'smooth'});">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>
+</button>
+<style>
+    #back-to-top-btn{position:fixed;right:26px;bottom:26px;z-index:2000;width:48px;height:48px;border-radius:50%;border:none;background:#13176b;color:#fff;display:none;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 10px 22px rgba(19,23,107,.35);transition:transform .15s ease,background .2s ease;}
+    #back-to-top-btn:hover{background:#dba617;transform:translateY(-3px);}
+    #back-to-top-btn svg{width:22px;height:22px;}
+</style>
+<script>
+    (function () {
+        var btn = document.getElementById('back-to-top-btn');
+        if (!btn) return;
+        function toggleBackToTop() {
+            btn.style.display = (window.scrollY || document.documentElement.scrollTop) > 400 ? 'flex' : 'none';
+        }
+        window.addEventListener('scroll', toggleBackToTop, { passive: true });
+        toggleBackToTop();
+    })();
 </script>
 </body>
 </html>

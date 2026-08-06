@@ -353,6 +353,24 @@
         .btn-deny { background: #fff1f2; color: #b91c1c; border: 1.5px solid #fecdd3; }
         .btn-deny:hover { background: #ffe4e6; transform: translateY(-1px); }
 
+        /* ─── PUBLISH / FEATURE (admin-only) ────────────────────── */
+        .course-actions-admin { margin-top: 10px; }
+        .btn-publish, .btn-feature {
+            flex: 1;
+            border-radius: 9px;
+            padding: 10px 0;
+            font-size: 0.8rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: background .18s, transform .15s, color .18s, border-color .18s;
+            border: 1.5px solid #c7cde8;
+            background: #f4f6fd;
+            color: #13176b;
+        }
+        .btn-publish:hover, .btn-feature:hover { transform: translateY(-1px); }
+        .btn-publish.is-on { background: #13176b; color: #fff; border-color: #13176b; }
+        .btn-feature.is-on { background: #fdf3d7; color: #c4930f; border-color: #f0dc9a; }
+
         /* flash message */
         .alert-success {
             background: #ecfdf5;
@@ -536,6 +554,24 @@
                 </form>
             </div>
             @endif
+
+            {{-- Admin-only powers: publish/unpublish + feature on homepage --}}
+            <div class="course-actions course-actions-admin">
+                <form method="POST" action="{{ route('admin.courses.publish', $course->id) }}" onclick="event.stopPropagation();" style="flex:1;display:flex;">
+                    @csrf
+                    <button type="submit" class="btn-publish {{ $course->is_published ? 'is-on' : '' }}" onclick="event.stopPropagation();"
+                            title="{{ $course->is_published ? 'Visible to students — click to unpublish' : 'Hidden from students — click to publish' }}">
+                        {{ $course->is_published ? 'Published' : 'Publish' }}
+                    </button>
+                </form>
+                <form method="POST" action="{{ route('admin.courses.feature', $course->id) }}" onclick="event.stopPropagation();" style="flex:1;display:flex;">
+                    @csrf
+                    <button type="submit" class="btn-feature {{ $course->is_featured ? 'is-on' : '' }}" onclick="event.stopPropagation();"
+                            title="{{ $course->is_featured ? 'Shown on the homepage — click to unfeature' : 'Feature this course on the homepage' }}">
+                        {{ $course->is_featured ? '★ Featured' : '☆ Feature on Homepage' }}
+                    </button>
+                </form>
+            </div>
         </div>
         @endforeach
     </div>
@@ -554,5 +590,27 @@
     }
 </script>
 
+
+{{-- ── Back to top (appears on long pages) ── --}}
+<button id="back-to-top-btn" type="button" title="Back to top" aria-label="Back to top"
+        onclick="window.scrollTo({top:0,behavior:'smooth'});">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>
+</button>
+<style>
+    #back-to-top-btn{position:fixed;right:26px;bottom:26px;z-index:2000;width:48px;height:48px;border-radius:50%;border:none;background:#13176b;color:#fff;display:none;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 10px 22px rgba(19,23,107,.35);transition:transform .15s ease,background .2s ease;}
+    #back-to-top-btn:hover{background:#dba617;transform:translateY(-3px);}
+    #back-to-top-btn svg{width:22px;height:22px;}
+</style>
+<script>
+    (function () {
+        var btn = document.getElementById('back-to-top-btn');
+        if (!btn) return;
+        function toggleBackToTop() {
+            btn.style.display = (window.scrollY || document.documentElement.scrollTop) > 400 ? 'flex' : 'none';
+        }
+        window.addEventListener('scroll', toggleBackToTop, { passive: true });
+        toggleBackToTop();
+    })();
+</script>
 </body>
 </html>

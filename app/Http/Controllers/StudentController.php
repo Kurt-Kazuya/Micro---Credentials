@@ -24,6 +24,18 @@ use Illuminate\Support\Facades\Schema;
  */
 class StudentController extends Controller
 {
+    /**
+     * Selectable skills shown as checkbox lists in the About Me form
+     * ("Skills you already have" / "Skills you want to learn").
+     */
+    private const SKILL_OPTIONS = [
+        'HTML', 'CSS', 'JavaScript', 'Python', 'Java', 'PHP', 'SQL',
+        'Computer Networking', 'Video Editing', 'Photo Editing', 'Graphic Design',
+        'Data Analysis', 'Excel', 'Digital Marketing', 'Writing', 'Public Speaking',
+        'Communication', 'Leadership', 'Singing', 'Dancing', 'Drawing', 'Cooking',
+        'Hacking', 'Baking',
+    ];
+
     // ── Dashboard ─────────────────────────────────────────────────────────
 
     public function dashboard()
@@ -40,7 +52,12 @@ class StudentController extends Controller
             'category'         => $e->course->category ?? null,
             'thumbnail_url'    => ! empty($e->course->thumbnail_url) ? asset($e->course->thumbnail_url) : null,
             'progress_percent' => (int) $e->progress_percent,
+            'is_completed'     => $e->is_completed || (int) $e->progress_percent >= 100,
         ])->values();
+
+        // Organized course lists for the dashboard.
+        $inProgressCourses = $courses->where('is_completed', false)->values();
+        $completedCourses  = $courses->where('is_completed', true)->values();
 
         $badges = UserBadge::with('badge')
             ->where('user_id', $auth->id)
@@ -66,10 +83,39 @@ class StudentController extends Controller
                 'badges_earned'  => $badges->count(),
                 'certificates'   => $auth->certificates()->count(),
             ],
-            'courses'  => $courses,
+            'courses'           => $courses,
+            'inProgressCourses' => $inProgressCourses,
+            'completedCourses'  => $completedCourses,
             'progress' => $progress,
             'badges'   => $badges,
             'show_about_form' => ! (bool) ($auth->profile_completed ?? false),
+            'skill_options'   => self::SKILL_OPTIONS,
+        ]);
+    }
+
+    // ── Enrolled Courses page ────────────────────────────────────────────
+
+    public function enrolledCourses()
+    {
+        $auth = Auth::user();
+
+        $enrollments = Enrollment::with('course')
+            ->where('user_id', $auth->id)
+            ->get();
+
+        $courses = $enrollments->map(fn (Enrollment $e) => (object) [
+            'id'               => $e->course_id,
+            'title'            => $e->course->title ?? 'Course',
+            'category'         => $e->course->category ?? null,
+            'thumbnail_url'    => ! empty($e->course->thumbnail_url) ? asset($e->course->thumbnail_url) : null,
+            'progress_percent' => (int) $e->progress_percent,
+            'is_completed'     => $e->is_completed || (int) $e->progress_percent >= 100,
+        ])->values();
+
+        return view('Student_Enrolled_Courses', [
+            'user'              => UserPresenter::student($auth),
+            'inProgressCourses' => $courses->where('is_completed', false)->values(),
+            'completedCourses'  => $courses->where('is_completed', true)->values(),
         ]);
     }
 
@@ -84,13 +130,19 @@ class StudentController extends Controller
             'gender'        => ['required', 'string', 'max:50'],
             'education'     => ['required', 'string', 'max:255'],
             'bio'           => ['nullable', 'string', 'max:2000'],
-            'skills_have'   => ['nullable', 'string', 'max:1000'],
-            'skills_want'   => ['nullable', 'string', 'max:1000'],
+            'skills_have'   => ['nullable'],
+            'skills_have.*' => ['string', 'max:60'],
+            'skills_want'   => ['nullable'],
+            'skills_want.*' => ['string', 'max:60'],
         ]);
 
-        $splitSkills = function (?string $raw): array {
-            return collect(preg_split('/[,;\n]+/', (string) $raw))
-                ->map(fn ($s) => trim($s))
+        // Accepts either the checkbox array (About Me form) or a
+        // comma-separated string (Edit Profile form).
+        $splitSkills = function ($raw): array {
+            $items = is_array($raw) ? $raw : preg_split('/[,;\n]+/', (string) $raw);
+
+            return collect($items)
+                ->map(fn ($s) => trim((string) $s))
                 ->filter()
                 ->unique()
                 ->values()
@@ -958,17 +1010,44 @@ class StudentController extends Controller
 
         $avgScore = QuizAttempt::where('user_id', $auth->id)->avg('score');
 
-        $activeCourses = $enrollments->map(function (Enrollment $e) {
-            $students = $e->course ? $e->course->enrollments()->count() : 0;
-            $faculty  = 1;
+        // Only courses the student is still taking — a course that reaches
+        // 100% leaves this list and moves into "Enrolled Courses".
+        $activeCourses = $enrollments
+            ->filter(fn (Enrollment $e) => ! $e->is_completed && (int) $e->progress_percent < 100)
+            ->map(function (Enrollment $e) {
+                $students = $e->course ? $e->course->enrollments()->count() : 0;
+                $faculty  = 1;
 
-            return (object) [
-                'title'         => $e->course->title ?? 'Course',
-                'meta'          => $students . ' Students · ' . $faculty . ' Faculty',
-                'thumbnail_url' => $e->course->thumbnail_url ?? null,
-                'percent'       => (int) $e->progress_percent,
-            ];
-        })->values();
+                return (object) [
+                    'title'         => $e->course->title ?? 'Course',
+                    'meta'          => $students . ' Students · ' . $faculty . ' Faculty',
+                    'thumbnail_url' => $e->course->thumbnail_url ?? null,
+                    'percent'       => (int) $e->progress_percent,
+                ];
+            })->values();
+
+        // Completed courses — shown under "Enrolled Courses".
+        $enrolledCourses = $enrollments
+            ->filter(fn (Enrollment $e) => $e->is_completed || (int) $e->progress_percent >= 100)
+            ->sortByDesc('updated_at')
+            ->map(function (Enrollment $e) {
+                $students = $e->course ? $e->course->enrollments()->count() : 0;
+
+                return (object) [
+                    'title'         => $e->course->title ?? 'Course',
+                    'meta'          => $students . ' Students · 1 Faculty',
+                    'thumbnail_url' => $e->course->thumbnail_url ?? null,
+                    'percent'       => (int) $e->progress_percent,
+                ];
+            })->values();
+
+        // Completion Rate dropdown data: every enrolled course + its own %.
+        $completionCourses = $enrollments
+            ->sortBy('course.title')
+            ->map(fn (Enrollment $e) => (object) [
+                'title'   => $e->course->title ?? 'Course',
+                'percent' => (int) round((float) $e->progress_percent),
+            ])->values();
 
         [$enrollmentByCourse, $completionRate] = $this->courseCharts();
 
@@ -991,6 +1070,8 @@ class StudentController extends Controller
                 'hours_enrolled' => $enrollments->count() * 7,
             ],
             'activeCourses'      => $activeCourses,
+            'enrolledCourses'    => $enrolledCourses,
+            'completionCourses'  => $completionCourses,
             'recentBadges'       => $recentBadges,
             'enrollmentByCourse' => $enrollmentByCourse,
             'completionRate'     => $completionRate,

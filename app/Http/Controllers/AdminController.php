@@ -251,6 +251,8 @@ class AdminController extends Controller
                 'status'     => $c->statusLabel(),
                 'status_key' => $this->statusKey($c),
                 'percent'    => (int) round((float) DB::table('enrollments')->where('course_id', $c->id)->avg('progress_percent')),
+                'is_published' => (bool) $c->is_published,
+                'is_featured'  => (bool) $c->is_featured,
             ])
             ->values();
 
@@ -296,14 +298,26 @@ class AdminController extends Controller
             'title'       => $m->title,
             'description' => $m->description,
             'lessons'     => $m->lessons->map(fn ($l) => (object) [
-                'title'    => $l->title,
-                'type'     => $l->type,
-                'duration' => $l->duration,
+                'title'       => $l->title,
+                'type'        => $l->type,
+                'duration'    => $l->duration,
+                'description' => $l->description,
+                'file_url'    => ! empty($l->file_url) ? asset($l->file_url) : null,
+                'file_name'   => ! empty($l->file_url) ? basename($l->file_url) : null,
             ])->values(),
             'quiz' => $m->quiz ? (object) [
                 'title'           => $m->quiz->title,
                 'questions_count' => $m->quiz->questions->count(),
                 'passing_score'   => $m->quiz->passing_score,
+                'time_limit'      => $m->quiz->time_limit,
+                'instructions'    => $m->quiz->instructions ?? '',
+                'questions'       => $m->quiz->questions->map(fn ($q) => (object) [
+                    'question'       => $q->question,
+                    'type'           => $q->type ?? 'Multiple Choice',
+                    'points'         => (int) $q->points,
+                    'options'        => $q->options ?? [],
+                    'correct_answer' => $q->correct_answer,
+                ])->values(),
             ] : null,
         ])->values();
 
@@ -345,6 +359,42 @@ class AdminController extends Controller
 
         return redirect()->route('admin.courses')
             ->with('success', '"' . $course->title . '" has been denied.');
+    }
+
+    /**
+     * Publish / unpublish a course — admin-only. Unpublished courses are
+     * hidden from students even if they were previously approved.
+     */
+    public function togglePublishCourse(int $id)
+    {
+        $course = Course::findOrFail($id);
+
+        $course->is_published = ! $course->is_published;
+        if ($course->is_published) {
+            // Publishing implies approval.
+            $course->approval_status = 'approved';
+            $course->is_approved     = true;
+            $course->approved_by     = $course->approved_by ?? Auth::id();
+            $course->approved_at     = $course->approved_at ?? now();
+        }
+        $course->save();
+
+        return back()->with('success', '"' . $course->title . '" is now '
+            . ($course->is_published ? 'published.' : 'unpublished — hidden from students.'));
+    }
+
+    /**
+     * Feature / unfeature a course on the homepage — admin-only.
+     */
+    public function toggleFeatureCourse(int $id)
+    {
+        $course = Course::findOrFail($id);
+
+        $course->is_featured = ! $course->is_featured;
+        $course->save();
+
+        return back()->with('success', '"' . $course->title . '" '
+            . ($course->is_featured ? 'will be featured on the homepage.' : 'was removed from the homepage features.'));
     }
 
     /**
