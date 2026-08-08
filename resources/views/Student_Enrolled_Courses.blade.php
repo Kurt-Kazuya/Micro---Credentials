@@ -74,8 +74,10 @@
     /* Course areas */
     .courses-area-title{margin:26px 0 14px;font-size:17px;font-weight:800;color:var(--navy);letter-spacing:.3px;display:flex;align-items:center;gap:10px;}
     .courses-area-title .count-chip{background:#eef1fb;color:var(--navy);font-size:12px;font-weight:800;padding:3px 12px;border-radius:999px;}
-    .course-card{display:flex;align-items:center;gap:20px;border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);padding:18px 22px;margin-bottom:14px;background:#fff;}
-    .course-card .thumb{width:120px;height:80px;border-radius:12px;background:var(--thumb);background-size:cover;background-position:center;flex-shrink:0;}
+    .course-card{display:flex;align-items:center;gap:22px;border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow);padding:20px 24px;margin-bottom:16px;background:#fff;border-left:6px solid var(--navy);transition:transform .18s ease,box-shadow .18s ease;}
+    .course-card:hover{transform:translateY(-3px);box-shadow:0 18px 38px rgba(19,23,107,.16);}
+    .course-card.is-completed{border-left-color:var(--green);}
+    .course-card .thumb{width:140px;height:96px;border-radius:14px;background:linear-gradient(135deg,var(--navy) 0%,#3b41c8 100%);background-size:cover;background-position:center;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);}
     .course-info{flex:1;min-width:0;}
     .course-info h4{margin:0 0 4px;font-size:17px;color:var(--navy);}
     .course-info .cat{font-size:12.5px;color:var(--muted);margin-bottom:10px;}

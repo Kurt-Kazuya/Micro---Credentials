@@ -150,20 +150,8 @@
         <h1>UPSKILL</h1>
     </div>
 
-    {{-- "Courses" → My Courses list · "Dashboard" → Faculty Dashboard --}}
-    <nav class="nav-pills">
-        <a href="{{ route('faculty.courses') }}">Courses</a>
-        <a href="{{ route('faculty.dashboard') }}">Dashboard</a>
-    </nav>
-
-    {{-- ⚠ Not connected — search does nothing yet --}}
-    <div class="search-box">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-        <input type="text" name="q" placeholder="Search">
-    </div>
-
     <div class="icon-cluster">
-        <a href="#" class="icon-circle" title="Notifications">
+        <a href="{{ route('notifications.index') }}" class="icon-circle" title="Notifications">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
         </a>
         <a href="{{ route('faculty.profile') }}" class="icon-circle" title="{{ $user->name ?? 'Profile' }}"
@@ -232,7 +220,7 @@
 
         {{-- ✅ Real form — Save stores the course (session for now) and
              redirects to the Managing Course screen for the new course --}}
-        <form method="POST" action="{{ route('faculty.create.store') }}" enctype="multipart/form-data">
+        <form method="POST" action="{{ route('faculty.create.store') }}" enctype="multipart/form-data" id="create-course-form">
             @csrf
 
         {{-- Validation / save errors — only visible when something went wrong --}}
@@ -265,17 +253,6 @@
                                 <option value="">Select a Category</option>
                                 @foreach ($categories ?? [] as $category)
                                     <option value="{{ $category }}">{{ $category }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                    </div>
-                    <div>
-                        <label>Program</label>
-                        <div class="select-wrap">
-                            <select class="select" name="program">
-                                <option value="">Select a Program</option>
-                                @foreach ($programs ?? [] as $program)
-                                    <option value="{{ $program }}">{{ $program }}</option>
                                 @endforeach
                             </select>
                         </div>
@@ -423,6 +400,53 @@
         }
         window.addEventListener('scroll', toggleBackToTop, { passive: true });
         toggleBackToTop();
+    })();
+</script>
+
+<script>
+    // ── Draft persistence: keep filled fields when leaving & returning ──
+    (function () {
+        var form = document.getElementById('create-course-form');
+        if (!form) return;
+        var KEY = 'upskill_create_course_draft';
+
+        // Restore saved values on load (server-rendered old() values win when
+        // the form bounced back from a validation error).
+        try {
+            var saved = JSON.parse(localStorage.getItem(KEY) || '{}');
+            var hasServerValues = {{ $errors->any() ? 'true' : 'false' }};
+            if (!hasServerValues) {
+                Object.keys(saved).forEach(function (name) {
+                    var field = form.querySelector('[name="' + name + '"]');
+                    if (!field) return;
+                    if (field.type === 'radio') {
+                        var r = form.querySelector('[name="' + name + '"][value="' + saved[name] + '"]');
+                        if (r) r.checked = true;
+                    } else if (field.type !== 'file') {
+                        field.value = saved[name];
+                    }
+                });
+            }
+        } catch (e) {}
+
+        // Save every change.
+        form.addEventListener('input', saveDraft);
+        form.addEventListener('change', saveDraft);
+        function saveDraft() {
+            var data = {};
+            form.querySelectorAll('input, select, textarea').forEach(function (f) {
+                if (!f.name || f.type === 'file' || f.type === 'password') return;
+                if (f.type === 'radio') { if (f.checked) data[f.name] = f.value; return; }
+                if (f.type === 'checkbox') { data[f.name] = f.checked ? f.value : ''; return; }
+                data[f.name] = f.value;
+            });
+            try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) {}
+        }
+
+        // Clear the draft once the course is actually created.
+        form.addEventListener('submit', function () {
+            try { localStorage.removeItem(KEY); } catch (e) {}
+        });
     })();
 </script>
 </body>

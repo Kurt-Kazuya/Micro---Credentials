@@ -93,6 +93,7 @@ Route::middleware(RoleBasedAccess::class . ':admin')->group(function () {
 
     Route::get('/Admin-usermanagement', [AdminController::class, 'userManagement'])->name('admin.usermanagement');
     Route::post('/Admin-usermanagement/users', [AdminController::class, 'storeUser'])->name('admin.users.store');
+    Route::get('/Admin-usermanagement/users/{id}', [AdminController::class, 'showUser'])->whereNumber('id')->name('admin.users.show');
 
     Route::get('/Admin-facultycodes', [AdminController::class, 'facultyCodes'])->name('admin.facultycodes');
     Route::post('/Admin-facultycodes', [AdminController::class, 'generateFacultyCode'])->name('admin.facultycodes.generate');
@@ -159,6 +160,8 @@ Route::middleware(RoleBasedAccess::class . ':faculty')->group(function () {
     Route::patch('/Faculty-profile', [FacultyController::class, 'updateProfile'])->name('faculty.profile.update');
 
     Route::get('/Faculty-analytics', [FacultyController::class, 'analytics'])->name('faculty.analytics');
+
+    Route::get('/Faculty-students', [FacultyController::class, 'students'])->name('faculty.students');
 
     Route::get('/Faculty-mycourses', [FacultyController::class, 'courses'])->name('faculty.courses');
     Route::get('/Faculty-mycourses/manage/{id?}', [FacultyController::class, 'manage'])

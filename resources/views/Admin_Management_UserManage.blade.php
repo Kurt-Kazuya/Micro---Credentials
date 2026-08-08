@@ -358,6 +358,30 @@
             margin-bottom: 24px;
         }
 
+        .role-tabs {
+            display: flex;
+            gap: 8px;
+        }
+        .role-tab {
+            padding: 9px 20px;
+            border-radius: 10px;
+            font-weight: 700;
+            font-size: 0.86rem;
+            text-decoration: none;
+            border: 1.5px solid #c7cde8;
+            background: #f4f6fd;
+            color: var(--navy, #13176b);
+            transition: background .18s, color .18s, border-color .18s;
+        }
+        .role-tab:hover { transform: translateY(-1px); }
+        .role-tab.active {
+            background: #13176b;
+            color: #fff;
+            border-color: #13176b;
+        }
+        .um-row-click { cursor: pointer; transition: background .12s; }
+        .um-row-click:hover { background: #f6f8ff; }
+
         .user-search-form {
             display: flex;
             flex-wrap: wrap;
@@ -427,12 +451,6 @@
     </a>
 
     <div class="topbar-right">
-        <form action="{{ route('search') }}" method="GET" class="search-wrap" role="search">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-            </svg>
-            <input type="text" name="q" placeholder="Search">
-        </form>
 
         <a href="{{ route('admin.profile') }}" class="avatar-btn" title="My Profile">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
@@ -525,12 +543,19 @@
 <main class="main">
 
     <div class="user-tools">
+        @php $roleTab = $roleTab ?? 'students'; @endphp
+        <div class="role-tabs">
+            <a href="{{ route('admin.usermanagement', array_merge(request()->except('role','page'), ['role' => 'students'])) }}"
+               class="role-tab {{ $roleTab === 'students' ? 'active' : '' }}">Students</a>
+            <a href="{{ route('admin.usermanagement', array_merge(request()->except('role','page'), ['role' => 'faculty'])) }}"
+               class="role-tab {{ $roleTab === 'faculty' ? 'active' : '' }}">Faculty</a>
+        </div>
         <form class="user-search-form" action="{{ route('admin.usermanagement') }}" method="GET">
+            <input type="hidden" name="role" value="{{ $roleTab }}">
             <input type="text" name="q" value="{{ $q ?? '' }}" placeholder="Search by name, email, or user code">
             <select name="sort">
                 <option value="created_at" {{ ($sort ?? 'created_at') === 'created_at' ? 'selected' : '' }}>Newest</option>
                 <option value="name" {{ ($sort ?? '') === 'name' ? 'selected' : '' }}>Name</option>
-                <option value="role" {{ ($sort ?? '') === 'role' ? 'selected' : '' }}>Role</option>
                 <option value="user_code" {{ ($sort ?? '') === 'user_code' ? 'selected' : '' }}>User Code</option>
             </select>
             <input type="hidden" name="direction" value="{{ $direction === 'asc' ? 'desc' : 'asc' }}">
@@ -554,7 +579,7 @@
                 </thead>
                 <tbody>
                     @foreach ($users as $user)
-                    <tr>
+                    <tr class="um-row-click" onclick="window.location='{{ route('admin.users.show', $user->id) }}'" title="View details">
                         <td>{{ trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? '')) ?: ($user->username ?? '—') }}</td>
                         <td>{{ $user->email }}</td>
                         <td>{{ match ((int) ($user->role_id ?? 3)) {1 => 'Administrator', 2 => 'Faculty', 3 => 'Learner', default => 'Learner'} }}</td>

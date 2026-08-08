@@ -409,12 +409,6 @@
     </a>
 
     <div class="topbar-right">
-        <form action="{{ route('search') }}" method="GET" class="search-wrap" role="search">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-            </svg>
-            <input type="text" name="q" placeholder="Search">
-        </form>
 
         <a href="{{ route('admin.profile') }}" class="avatar-btn" title="My Profile">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
@@ -555,15 +549,8 @@
             </div>
             @endif
 
-            {{-- Admin-only powers: publish/unpublish + feature on homepage --}}
+            {{-- Admin-only power: feature on homepage --}}
             <div class="course-actions course-actions-admin">
-                <form method="POST" action="{{ route('admin.courses.publish', $course->id) }}" onclick="event.stopPropagation();" style="flex:1;display:flex;">
-                    @csrf
-                    <button type="submit" class="btn-publish {{ $course->is_published ? 'is-on' : '' }}" onclick="event.stopPropagation();"
-                            title="{{ $course->is_published ? 'Visible to students — click to unpublish' : 'Hidden from students — click to publish' }}">
-                        {{ $course->is_published ? 'Published' : 'Publish' }}
-                    </button>
-                </form>
                 <form method="POST" action="{{ route('admin.courses.feature', $course->id) }}" onclick="event.stopPropagation();" style="flex:1;display:flex;">
                     @csrf
                     <button type="submit" class="btn-feature {{ $course->is_featured ? 'is-on' : '' }}" onclick="event.stopPropagation();"

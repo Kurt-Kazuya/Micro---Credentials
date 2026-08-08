@@ -3,8 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\AnalyticsEvent;
+use App\Models\Announcement;
+use App\Models\Certificate;
 use App\Models\Course;
+use App\Models\Enrollment;
 use App\Models\Notification;
+use App\Models\UserBadge;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -47,12 +51,89 @@ class PageController extends Controller
             );
         }
 
+        // ── Hero counters — real, live site-wide numbers ─────────────
+        $stats = [
+            'courses'      => Course::where('is_published', true)->count(),
+            'learners'     => User::where('role_id', User::ROLE_STUDENT)->count(),
+            'certificates' => Certificate::count(),
+            'badges'       => UserBadge::count(),
+        ];
+
+        // ── Announcements — real site activity (new courses, enrollment
+        //    milestones, recent badges) plus any published announcements ──
+        $announcements = $this->buildAnnouncements();
+
         return view('Homepage', [
             'featuredCourses' => $cards($featured),
             'latestCourses'   => $cards(
                 Course::where('is_published', true)->latest('created_at')->limit(3)->get()
             ),
+            'stats'           => $stats,
+            'announcements'   => $announcements,
         ]);
+    }
+
+    /**
+     * Build the homepage announcement feed from real site activity:
+     * published admin announcements first, then auto-generated items for
+     * newly published courses, this month's enrollment count, and the
+     * latest badge awards.
+     */
+    private function buildAnnouncements()
+    {
+        $items = collect();
+
+        // 1) Manually published announcements (if any exist).
+        $manual = Announcement::where('is_published', true)
+            ->latest('published_at')->limit(3)->get()
+            ->map(fn (Announcement $a) => [
+                'type'  => 'general',
+                'label' => 'Announcement',
+                'date'  => ($a->published_at ?? $a->created_at)?->format('F j, Y') ?? '',
+                'title' => $a->title,
+                'desc'  => \Illuminate\Support\Str::limit((string) $a->body, 160),
+            ]);
+        $items = $items->concat($manual);
+
+        // 2) New courses published this month.
+        Course::where('is_published', true)
+            ->latest('approved_at')->limit(2)->get()
+            ->each(function (Course $c) use ($items) {
+                $items->push([
+                    'type'  => 'general',
+                    'label' => 'New Course',
+                    'date'  => ($c->approved_at ?? $c->created_at)?->format('F j, Y') ?? '',
+                    'title' => 'New Course Added: ' . $c->title,
+                    'desc'  => \Illuminate\Support\Str::limit((string) $c->description, 160)
+                                ?: 'A new course is now available in the catalog.',
+                ]);
+            });
+
+        // 3) Enrollment activity this month.
+        $monthEnroll = Enrollment::where('created_at', '>=', now()->startOfMonth())->count();
+        if ($monthEnroll > 0) {
+            $items->push([
+                'type'  => 'event',
+                'label' => 'Enrollment',
+                'date'  => now()->format('F Y'),
+                'title' => $monthEnroll . ' new ' . \Illuminate\Support\Str::plural('enrollment', $monthEnroll) . ' this month',
+                'desc'  => 'Students are actively enrolling across our microcredential courses this month.',
+            ]);
+        }
+
+        // 4) Latest badge award.
+        $latestBadge = UserBadge::with('badge')->latest('earned_at')->first();
+        if ($latestBadge) {
+            $items->push([
+                'type'  => 'general',
+                'label' => 'Achievement',
+                'date'  => $latestBadge->earned_at?->format('F j, Y') ?? '',
+                'title' => 'Badge Awarded: ' . ($latestBadge->badge->name ?? 'Badge'),
+                'desc'  => 'A learner just earned the "' . ($latestBadge->badge->name ?? 'Badge') . '" badge.',
+            ]);
+        }
+
+        return $items->take(5)->values();
     }
 
     /**
@@ -113,9 +194,12 @@ class PageController extends Controller
      */
     public function notifications()
     {
-        if (Auth::check()) {
-            $notifications = Notification::query()
-                ->where('user_id', Auth::id())
+        $auth = Auth::user();
+
+        // 1) Stored notifications for this user (highest priority).
+        if ($auth) {
+            $stored = Notification::query()
+                ->where('user_id', $auth->id)
                 ->latest()
                 ->limit(30)
                 ->get()
@@ -126,37 +210,72 @@ class PageController extends Controller
                     'type'    => $n->type,
                     'unread'  => ! $n->is_read,
                 ]);
-
-            if ($notifications->isNotEmpty()) {
-                return view('notifications', compact('notifications'));
+            if ($stored->isNotEmpty()) {
+                return view('notifications', ['notifications' => $stored]);
             }
         }
 
-        $notifications = collect([
-            (object) [
-                'title'   => 'Course update available',
-                'message' => 'A new lesson was added to your enrolled course.',
-                'time'    => '10 min ago',
-                'type'    => 'course',
-                'unread'  => true,
-            ],
-            (object) [
-                'title'   => 'New announcement',
-                'message' => 'The faculty team posted a new milestone update.',
-                'time'    => '1 hour ago',
-                'type'    => 'announcement',
-                'unread'  => true,
-            ],
-            (object) [
-                'title'   => 'System reminder',
-                'message' => 'Your badge portfolio was refreshed.',
-                'time'    => 'Yesterday',
+        // 2) Otherwise build a live activity feed so the bell is never empty.
+        $notifications = collect();
+
+        if ($auth && (int) $auth->role_id === User::ROLE_FACULTY) {
+            // Faculty: what is happening with THEIR courses.
+            $courseIds = Course::where('created_by', $auth->id)->pluck('id');
+
+            Enrollment::with(['user', 'course'])->whereIn('course_id', $courseIds)
+                ->latest()->limit(5)->get()
+                ->each(fn ($e) => $notifications->push((object) [
+                    'title'   => 'New student enrolled',
+                    'message' => ($e->user->name ?? 'A student') . ' enrolled in "' . ($e->course->title ?? 'your course') . '".',
+                    'time'    => $e->created_at?->diffForHumans() ?? '',
+                    'type'    => 'enrollment',
+                    'unread'  => true,
+                ]));
+
+            UserBadge::with(['user', 'badge'])->whereHas('user.enrollments', fn ($q) => $q->whereIn('course_id', $courseIds))
+                ->latest('earned_at')->limit(3)->get()
+                ->each(fn ($ub) => $notifications->push((object) [
+                    'title'   => 'Badge awarded',
+                    'message' => ($ub->user->name ?? 'A student') . ' earned the "' . ($ub->badge->name ?? 'Badge') . '" badge.',
+                    'time'    => $ub->earned_at?->diffForHumans() ?? '',
+                    'type'    => 'badge',
+                    'unread'  => true,
+                ]));
+        } else {
+            // Student / guest: their own badges + new courses on the site.
+            if ($auth) {
+                UserBadge::with('badge')->where('user_id', $auth->id)
+                    ->latest('earned_at')->limit(4)->get()
+                    ->each(fn ($ub) => $notifications->push((object) [
+                        'title'   => 'Badge earned',
+                        'message' => 'You earned the "' . ($ub->badge->name ?? 'Badge') . '" badge. Congratulations!',
+                        'time'    => $ub->earned_at?->diffForHumans() ?? '',
+                        'type'    => 'badge',
+                        'unread'  => true,
+                    ]));
+            }
+
+            Course::where('is_published', true)->latest('approved_at')->limit(3)->get()
+                ->each(fn ($c) => $notifications->push((object) [
+                    'title'   => 'New course available',
+                    'message' => '"' . $c->title . '" was just published and is open for enrollment.',
+                    'time'    => ($c->approved_at ?? $c->created_at)?->diffForHumans() ?? '',
+                    'type'    => 'course',
+                    'unread'  => true,
+                ]));
+        }
+
+        if ($notifications->isEmpty()) {
+            $notifications->push((object) [
+                'title'   => 'All caught up',
+                'message' => 'There is no new activity right now. Check back later for updates.',
+                'time'    => '',
                 'type'    => 'system',
                 'unread'  => false,
-            ],
-        ]);
+            ]);
+        }
 
-        return view('notifications', compact('notifications'));
+        return view('notifications', ['notifications' => $notifications->take(10)->values()]);
     }
 
     /**
@@ -219,6 +338,22 @@ class PageController extends Controller
             })
             ->values()
             ->all();
+
+        // Fall back to real recent enrollments when no analytics events have
+        // been recorded yet — the feed should always show live activity.
+        if (count($activity) === 0) {
+            $activity = Enrollment::with(['user', 'course'])
+                ->latest()
+                ->limit(8)
+                ->get()
+                ->map(fn ($e) => [
+                    'title'  => 'New student enrolled',
+                    'detail' => ($e->user->name ?? 'A student') . ' · ' . ($e->course->title ?? 'a course'),
+                    'time'   => $e->created_at?->diffForHumans() ?? '',
+                ])
+                ->values()
+                ->all();
+        }
 
         // Same zero-inclusive badge counters the dashboard renders, so the
         // 15-second polling can refresh the Recent Badges panel live.

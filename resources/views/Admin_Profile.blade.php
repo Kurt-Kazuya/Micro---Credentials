@@ -345,15 +345,13 @@
 <body>
     <header class="topbar">
         <a href="{{ route('admin.dashboard') }}" class="topbar-brand">
-            <span class="brand-logo">U</span>
+            <span class="brand-logo">
+                <img src="{{ asset('images/PSU-Logo.png') }}" alt="PSU Logo" style="width:100%;height:100%;object-fit:contain;border-radius:50%;">
+            </span>
             UPSKILL
         </a>
 
         <div class="topbar-right">
-            <div class="search-wrap">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-                <input type="text" placeholder="Search" aria-label="Search">
-            </div>
             <div class="topbar-actions">
                 <a href="{{ route('admin.dashboard') }}" class="topbar-link">Back</a>
                 <form action="{{ route('logout') }}" method="POST" style="display:inline;">

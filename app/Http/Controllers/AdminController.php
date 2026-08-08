@@ -115,8 +115,11 @@ class AdminController extends Controller
         $query     = trim((string) $request->input('q', ''));
         $sort      = $request->input('sort', 'created_at');
         $direction = $request->input('direction') === 'asc' ? 'asc' : 'desc';
+        $roleTab   = $request->input('role', 'students');   // students | faculty
 
         $usersQuery = User::query()
+            ->when($roleTab === 'faculty', fn ($q) => $q->where('role_id', User::ROLE_FACULTY))
+            ->when($roleTab === 'students', fn ($q) => $q->where('role_id', User::ROLE_STUDENT))
             ->when($query !== '', function ($q) use ($query) {
                 $q->where(function ($sub) use ($query) {
                     $sub->where('first_name', 'like', "%{$query}%")
@@ -142,7 +145,41 @@ class AdminController extends Controller
             'q'         => $query,
             'sort'      => $sort,
             'direction' => $direction,
+            'roleTab'   => $roleTab,
         ]);
+    }
+
+    /**
+     * Admin › view a single user's full details (student or faculty).
+     */
+    public function showUser(int $id)
+    {
+        $u = User::withCount(['enrollments'])->findOrFail($id);
+
+        $detail = (object) [
+            'id'           => $u->id,
+            'name'         => $u->name,
+            'email'        => $u->email,
+            'username'     => $u->username,
+            'role'         => match ((int) $u->role_id) {1 => 'Administrator', 2 => 'Faculty', default => 'Learner'},
+            'student_id'   => $u->student_id ?? $u->user_code,
+            'phone'        => $u->phone,
+            'location'     => $u->location,
+            'gender'       => $u->gender,
+            'education'    => $u->education,
+            'date_of_birth'=> $u->date_of_birth,
+            'bio'          => $u->bio,
+            'avatar_url'   => $u->avatar_url,
+            'is_active'    => (bool) $u->is_active,
+            'joined'       => $u->created_at?->format('M d, Y'),
+            'enrollments'  => (int) $u->enrollments_count,
+            'courses_created' => (int) $u->role_id === User::ROLE_FACULTY
+                ? \App\Models\Course::where('created_by', $u->id)->count() : 0,
+            'skills_have'  => $u->skills_have ?? [],
+            'skills_want'  => $u->skills_want ?? [],
+        ];
+
+        return view('Admin_User_Detail', ['u' => $detail]);
     }
 
     public function storeUser(Request $request, UserCodeService $userCodes)
@@ -391,10 +428,24 @@ class AdminController extends Controller
         $course = Course::findOrFail($id);
 
         $course->is_featured = ! $course->is_featured;
+
+        if ($course->is_featured) {
+            // A featured course must be visible: featuring publishes (and
+            // approves) it so it appears on the homepage AND the
+            // View-all-Courses catalog.
+            $course->is_published    = true;
+            $course->is_approved     = true;
+            $course->approval_status = 'approved';
+            $course->approved_by     = $course->approved_by ?? Auth::id();
+            $course->approved_at     = $course->approved_at ?? now();
+        }
+
         $course->save();
 
         return back()->with('success', '"' . $course->title . '" '
-            . ($course->is_featured ? 'will be featured on the homepage.' : 'was removed from the homepage features.'));
+            . ($course->is_featured
+                ? 'is now published and featured on the homepage and course catalog.'
+                : 'was removed from the homepage features.'));
     }
 
     /**

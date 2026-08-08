@@ -59,6 +59,39 @@ class FacultyController extends Controller
         ]);
     }
 
+    // ── Enrolled Students (this faculty's courses only) ─────────────────
+
+    public function students()
+    {
+        $auth = Auth::user();
+
+        $students = Enrollment::with(['user', 'course'])
+            ->whereHas('course', fn ($q) => $q->where('created_by', $auth->id))
+            ->get()
+            ->groupBy('user_id')
+            ->map(function ($rows) {
+                $user = $rows->first()->user;
+
+                return (object) [
+                    'name'       => $user->name ?? 'Student',
+                    'student_id' => $user->student_id ?? $user->user_code ?? '',
+                    'avatar_url' => $user->avatar_url,
+                    'courses'    => $rows->map(fn ($e) => (object) [
+                        'title'     => $e->course->title ?? 'Course',
+                        'percent'   => (int) $e->progress_percent,
+                        'completed' => (bool) $e->is_completed || (int) $e->progress_percent >= 100,
+                    ])->values(),
+                ];
+            })
+            ->sortBy('name')
+            ->values();
+
+        return view('Faculty_Students', [
+            'user'     => UserPresenter::faculty($auth),
+            'students' => $students,
+        ]);
+    }
+
     // ── Profile ───────────────────────────────────────────────────────────
 
     public function profile()
@@ -344,18 +377,18 @@ class FacultyController extends Controller
     {
         return view('Faculty_Create_Courses', [
             'user' => UserPresenter::faculty(Auth::user()),
+            // Category now carries the programs (the separate Program
+            // dropdown was removed).
             'categories' => [
+                'BS Information Technology',
+                'BS Computer Science',
+                'BS Information Systems',
                 'Web Development',
                 'Artificial Intelligence',
                 'Databases',
                 'Networking',
                 'Computer Fundamentals',
                 'Project Management',
-            ],
-            'programs' => [
-                'BS Information Technology',
-                'BS Computer Science',
-                'BS Information Systems',
             ],
             'terms' => [
                 '1st Semester 2026 - 2027',

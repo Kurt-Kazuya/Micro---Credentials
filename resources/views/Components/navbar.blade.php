@@ -6,11 +6,6 @@
             <span class="navbar__brand-name">UPSKILL</span>
         </a>
 
-        {{-- Search Bar (inline) --}}
-        <div class="navbar__search-wrap">
-            <input type="text" class="navbar__search-input" placeholder="Search courses, topics, skills…">
-        </div>
-
         {{-- Desktop Nav Links --}}
         <ul class="navbar__links" id="navLinks">
             <li><a href="{{ url('/') }}"                  class="navbar__link {{ request()->is('/') ? 'active' : '' }}">Home</a></li>
@@ -60,26 +55,6 @@
     color: var(--white);
     letter-spacing: 0.04em;
 }
-
-/* Search (inline) */
-.navbar__search-wrap {
-    display: flex;
-    align-items: center;
-    background: rgba(255,255,255,0.10);
-    border-radius: 50px;
-    padding: 0.42rem 1rem;
-    width: 220px;
-    flex-shrink: 0;
-}
-.navbar__search-input {
-    background: none;
-    border: none;
-    outline: none;
-    color: var(--white);
-    font-size: 0.85rem;
-    width: 100%;
-}
-.navbar__search-input::placeholder { color: rgba(255,255,255,0.45); }
 
 /* Links */
 .navbar__links {
@@ -146,14 +121,12 @@
 
 /* ── Responsive ── */
 @media (max-width: 960px) {
-    .navbar__search-wrap { width: 160px; }
     .navbar__link { font-size: 0.82rem; padding: 0.4rem 0.6rem; }
 }
 
 @media (max-width: 768px) {
     .navbar__links       { display: none; }
     .navbar__actions     { display: none; }
-    .navbar__search-wrap { display: none; }
     .navbar__hamburger   { display: flex; }
 
     .navbar__links.open {

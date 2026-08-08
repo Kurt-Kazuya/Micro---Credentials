@@ -390,19 +390,19 @@
 
         <div class="hero__stats">
             <div class="hero__stat">
-                <div class="hero__stat-num">3+</div>
+                <div class="hero__stat-num" data-count="{{ $stats['courses'] ?? 0 }}">0</div>
                 <div class="hero__stat-label">Courses</div>
             </div>
             <div class="hero__stat">
-                <div class="hero__stat-num">4+</div>
+                <div class="hero__stat-num" data-count="{{ $stats['learners'] ?? 0 }}">0</div>
                 <div class="hero__stat-label">Learners</div>
             </div>
             <div class="hero__stat">
-                <div class="hero__stat-num">5+</div>
+                <div class="hero__stat-num" data-count="{{ $stats['certificates'] ?? 0 }}">0</div>
                 <div class="hero__stat-label">Certificates Issued</div>
             </div>
             <div class="hero__stat">
-                <div class="hero__stat-num">15+</div>
+                <div class="hero__stat-num" data-count="{{ $stats['badges'] ?? 0 }}">0</div>
                 <div class="hero__stat-label">Badges Earned</div>
             </div>
         </div>
@@ -460,44 +460,12 @@
     <div class="container">
         <div class="announcements__header">
             <h2 class="section-title">Announcements</h2>
-            <span class="announcements__badge">Live Updates</span>
         </div>
 
-        @php
-            $announcements = [
-                [
-                    'type'  => 'urgent',
-                    'label' => 'Important',
-                    'date'  => 'June 9, 2026',
-                    'title' => 'Platform Maintenance – June 15, 2026 (2:00 AM – 4:00 AM)',
-                    'desc'  => 'UpSkill will undergo scheduled maintenance. Please save your progress before this window. All courses and certificates will be unavailable during this time.',
-                ],
-                [
-                    'type'  => 'event',
-                    'label' => 'Event',
-                    'date'  => 'June 7, 2026',
-                    'title' => 'Microcredential Awarding Ceremony – Batch 3',
-                    'desc'  => 'Congratulations to all Batch 3 completers! The awarding ceremony is set for June 20, 2026 at the PSU Main Gymnasium. Check your email for your invitation.',
-                ],
-                [
-                    'type'  => 'general',
-                    'label' => 'New Course',
-                    'date'  => 'June 5, 2026',
-                    'title' => 'New Course Added: Cybersecurity Essentials',
-                    'desc'  => 'A brand-new course on Cybersecurity Essentials is now available in the catalog, authored by the PSU Department of Information Technology.',
-                ],
-                [
-                    'type'  => 'general',
-                    'label' => 'Reminder',
-                    'date'  => 'June 2, 2026',
-                    'title' => 'Enrollment Open for AY 2026–2027 Microcredential Programs',
-                    'desc'  => 'Enrollment for the next academic year\'s microcredential programs is now open. Slots are limited — enroll early to secure your spot.',
-                ],
-            ];
-        @endphp
+        @php $announcements = $announcements ?? []; @endphp
 
         <div class="announcements-list" id="announcements-list">
-            @foreach($announcements as $ann)
+            @forelse($announcements as $ann)
                 <div class="ann-card ann-card--{{ $ann['type'] }}">
                     <div class="ann-card__body">
                         <div class="ann-card__meta">
@@ -508,7 +476,9 @@
                         <p class="ann-card__desc">{{ $ann['desc'] }}</p>
                     </div>
                 </div>
-            @endforeach
+            @empty
+                <p style="color:var(--muted);padding:18px 4px;">No announcements yet — check back soon for new courses and site updates.</p>
+            @endforelse
         </div>
     </div>
 </section>
@@ -572,6 +542,28 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 });
+
+/* Animated hero counters — count up to the real totals */
+(function () {
+    const nums = document.querySelectorAll('.hero__stat-num[data-count]');
+    if (!nums.length) return;
+    const animate = (el) => {
+        const target = parseInt(el.dataset.count, 10) || 0;
+        const dur = 1200;
+        const start = performance.now();
+        function tick(now) {
+            const p = Math.min(1, (now - start) / dur);
+            const eased = 1 - Math.pow(1 - p, 3);
+            el.textContent = Math.round(target * eased) + (p === 1 && target > 0 ? '+' : '');
+            if (p < 1) requestAnimationFrame(tick);
+        }
+        requestAnimationFrame(tick);
+    };
+    const io = new IntersectionObserver((entries) => {
+        entries.forEach((e) => { if (e.isIntersecting) { animate(e.target); io.unobserve(e.target); } });
+    }, { threshold: 0.4 });
+    nums.forEach((n) => io.observe(n));
+})();
 
 /* Scroll-reveal for announcement cards */
 (function () {

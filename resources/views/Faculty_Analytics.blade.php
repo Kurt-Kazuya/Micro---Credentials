@@ -118,21 +118,9 @@
         <h1>UPSKILL</h1>
     </div>
 
-    {{-- ✅ Connected — only to My Courses and Dashboard --}}
-    <nav class="nav-pills">
-        <a href="{{ route('faculty.courses') }}">Courses</a>
-        <a href="{{ route('faculty.dashboard') }}">Dashboard</a>
-    </nav>
-
-    {{-- ⚠ Not connected — search does nothing yet --}}
-    <div class="search-box">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-        <input type="text" name="q" placeholder="Search">
-    </div>
-
     <div class="icon-cluster">
         {{-- ⚠ Not connected — no notifications page yet --}}
-        <a href="#" class="icon-circle" title="Notifications">
+        <a href="{{ route('notifications.index') }}" class="icon-circle" title="Notifications">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
         </a>
         {{-- ✅ Connected — goes to Faculty › Profile only --}}
@@ -399,7 +387,12 @@
                 if (!container) return;
 
                 container.innerHTML = '';
-                data.activity.slice(0, 5).forEach(item => {
+                const items = (data.activity || []).slice(0, 5);
+                if (items.length === 0) {
+                    container.innerHTML = '<div class="empty-state">No recent activity yet — events will appear here as they happen.</div>';
+                    return;
+                }
+                items.forEach(item => {
                     const row = document.createElement('div');
                     row.className = 'legend-item';
                     row.innerHTML = `<div class="legend-dot" style="background:${item.type === 'event' ? '#13176b' : '#dba617'}"></div><div><div class="l-num">${item.title}</div><div class="l-text">${item.detail} · ${item.time}</div></div>`;

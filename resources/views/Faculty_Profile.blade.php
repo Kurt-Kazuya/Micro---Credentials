@@ -356,18 +356,6 @@
         <h1>UPSKILL</h1>
     </div>
 
-    {{-- ✅ Connected — only to My Courses and Dashboard --}}
-    <nav class="nav-pills">
-        <a href="{{ route('faculty.courses') }}">Courses</a>
-        <a href="{{ route('faculty.dashboard') }}">Dashboard</a>
-    </nav>
-
-    {{-- ⚠ Not connected — search does nothing yet --}}
-    <div class="search-box">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-        <input type="text" name="q" placeholder="Search">
-    </div>
-
     <div class="icon-cluster">
         {{-- ⚠ Not connected — no notifications page yet --}}
         <a href="#" class="icon-circle notification-btn" title="Notifications">

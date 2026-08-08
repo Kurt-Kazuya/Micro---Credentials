@@ -92,11 +92,16 @@
 
     /* Stats */
     .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:22px;margin-bottom:36px;}
-    .stat-card{border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);padding:26px 20px;text-align:center;}
-    .stat-top{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:18px;}
-    .stat-top svg{width:46px;height:46px;color:var(--navy);}
-    .stat-top .num{font-size:44px;font-weight:800;color:var(--navy);}
-    .stat-card .label{font-weight:800;font-size:19px;color:var(--navy);}
+    /* Gradient stat cards (same design as Faculty Analytics) */
+    .stat-card{position:relative;border-radius:18px;box-shadow:var(--shadow);padding:30px 22px;text-align:center;color:#fff;overflow:hidden;min-height:120px;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+    .stat-card.c-navy{background:linear-gradient(135deg,var(--navy) 0%,#2a30b0 100%);}
+    .stat-card.c-gold{background:linear-gradient(135deg,var(--gold-dark) 0%,#f0c14b 100%);}
+    .stat-card.c-cyan{background:linear-gradient(135deg,#2fb3ab 0%,var(--cyan) 100%);}
+    .stat-card.c-deep{background:linear-gradient(135deg,var(--navy-deep) 0%,var(--navy) 100%);}
+    .stat-top{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:14px;position:relative;z-index:1;}
+    .stat-top svg{width:42px;height:42px;color:#fff;}
+    .stat-top .num{font-size:44px;font-weight:800;color:#fff;line-height:1;}
+    .stat-card .label{font-weight:800;font-size:17px;color:#fff;position:relative;z-index:1;}
 
     /* Content grid */
     .content-grid{display:grid;grid-template-columns:1fr 360px;gap:28px;}
@@ -141,20 +146,8 @@
         <h1>UPSKILL</h1>
     </div>
 
-    {{-- ⚠ Not connected — pills are placeholders --}}
-    <nav class="nav-pills">
-        <a href="#">Courses</a>
-        <a href="#" class="is-active">Dashboard</a>
-    </nav>
-
-    {{-- ⚠ Not connected — search does nothing yet --}}
-    <div class="search-box">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-        <input type="text" name="q" placeholder="Search">
-    </div>
-
     <div class="icon-cluster">
-        <a href="#" class="icon-circle" title="Notifications">
+        <a href="{{ route('notifications.index') }}" class="icon-circle" title="Notifications">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
         </a>
         <a href="{{ route('faculty.profile') }}" class="icon-circle" title="{{ $user->name ?? 'Profile' }}"
@@ -230,30 +223,30 @@
 
         {{-- Stat cards --}}
         <section class="stats">
-            <div class="stat-card">
+            <div class="stat-card c-navy">
                 <div class="stat-top">
                     <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 2h12v20l-6-4-6 4V2z"/></svg>
                     <span class="num">{{ $stats['total_courses'] ?? 0 }}</span>
                 </div>
                 <div class="label">Total Courses</div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card c-gold">
                 <div class="stat-top">
-                    <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10" fill="var(--navy)"/><path d="M8 12.5l2.5 2.5L16 9.5" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10" fill="#fff"/><path d="M8 12.5l2.5 2.5L16 9.5" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     <span class="num">{{ $stats['published'] ?? 0 }}</span>
                 </div>
                 <div class="label">Published</div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card c-cyan">
                 <div class="stat-top">
                     <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     <span class="num">{{ $stats['total_students'] ?? 0 }}</span>
                 </div>
                 <div class="label">Total Students</div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card c-deep">
                 <div class="stat-top">
-                    <svg viewBox="0 0 24 24" fill="none"><path d="M12 2l2.4 2.4 3.4-.6.6 3.4L21.8 9l-1.4 3 1.4 3-3.4 1.8-.6 3.4-3.4-.6L12 22l-2.4-2.4-3.4.6-.6-3.4L2.2 15l1.4-3-1.4-3 3.4-1.8.6-3.4 3.4.6L12 2z" fill="var(--navy)"/><path d="M9 12l2 2 4-4" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <svg viewBox="0 0 24 24" fill="none"><path d="M12 2l2.4 2.4 3.4-.6.6 3.4L21.8 9l-1.4 3 1.4 3-3.4 1.8-.6 3.4-3.4-.6L12 22l-2.4-2.4-3.4.6-.6-3.4L2.2 15l1.4-3-1.4-3 3.4-1.8.6-3.4 3.4.6L12 2z" fill="#fff"/><path d="M9 12l2 2 4-4" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     <span class="num">{{ $stats['enrollments'] ?? 0 }}</span>
                 </div>
                 <div class="label">Enrollments</div>
@@ -319,7 +312,7 @@
                     </div>
                     <div class="panel-body">
                         <div class="quick-actions">
-                            <a class="btn-quick" href="{{ route('students.index') }}">View Students</a>
+                            <a class="btn-quick" href="{{ route('faculty.students') }}">View Students</a>
                             <a class="btn-quick" href="{{ route('faculty.courses') }}">View Courses</a>
                         </div>
                     </div>

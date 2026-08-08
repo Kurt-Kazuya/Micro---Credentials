@@ -90,11 +90,16 @@
 
     /* Stats (shared pattern) */
     .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:22px;margin-bottom:32px;}
-    .stat-card{border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);padding:26px 20px;text-align:center;}
-    .stat-top{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:18px;}
-    .stat-top svg{width:42px;height:42px;color:var(--navy);}
-    .stat-top .num{font-size:38px;font-weight:800;color:var(--navy);}
-    .stat-card .label{font-weight:800;font-size:17px;color:var(--navy);}
+    /* Gradient stat cards (same design as course Analytics) */
+    .stat-card{position:relative;border-radius:18px;box-shadow:var(--shadow);padding:30px 22px;text-align:center;color:#fff;overflow:hidden;min-height:120px;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+    .stat-card.c-navy{background:linear-gradient(135deg,var(--navy) 0%,#2a30b0 100%);}
+    .stat-card.c-gold{background:linear-gradient(135deg,var(--gold-dark) 0%,#f0c14b 100%);}
+    .stat-card.c-cyan{background:linear-gradient(135deg,#2fb3ab 0%,var(--cyan) 100%);}
+    .stat-card.c-deep{background:linear-gradient(135deg,var(--navy-deep) 0%,var(--navy) 100%);}
+    .stat-top{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:14px;position:relative;z-index:1;}
+    .stat-top svg{width:42px;height:42px;color:#fff;}
+    .stat-top .num{font-size:38px;font-weight:800;color:#fff;line-height:1;}
+    .stat-card .label{font-weight:800;font-size:17px;color:#fff;position:relative;z-index:1;}
 
     /* Panels */
     .panel{border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);padding:22px 24px;}
@@ -255,28 +260,28 @@
 
         {{-- Stat cards --}}
         <section class="stats">
-            <div class="stat-card">
+            <div class="stat-card c-navy">
                 <div class="stat-top">
                     <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 2h12v20l-6-4-6 4V2z"/></svg>
                     <span class="num">{{ $stats['active_courses'] ?? 0 }}</span>
                 </div>
                 <div class="label">Active Courses</div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card c-gold">
                 <div class="stat-top">
                     <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3 6 7 1-5 5 1.5 7L12 17l-6.5 4L7 14 2 9l7-1 3-6z"/></svg>
                     <span class="num">{{ $stats['badges_earned'] ?? 0 }}</span>
                 </div>
                 <div class="label">Badges earned</div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card c-cyan">
                 <div class="stat-top">
-                    <svg viewBox="0 0 24 24" fill="none"><path d="M12 2l3 6 7 1-5 5 1.5 7L12 17l-6.5 4L7 14 2 9l7-1 3-6z" fill="var(--navy)"/><path d="M9 12l2 2 4-4" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <svg viewBox="0 0 24 24" fill="none"><path d="M12 2l3 6 7 1-5 5 1.5 7L12 17l-6.5 4L7 14 2 9l7-1 3-6z" fill="#fff"/><path d="M9 12l2 2 4-4" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     <span class="num">{{ $stats['score_avg'] ?? 0 }}%</span>
                 </div>
                 <div class="label">Course Score Avg</div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card c-deep">
                 <div class="stat-top">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
                     <span class="num">{{ $stats['hours_enrolled'] ?? 0 }}</span>
