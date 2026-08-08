@@ -321,39 +321,50 @@ class PageController extends Controller
             'quiz_passed'      => 'Quiz passed',
         ];
 
-        $activity = AnalyticsEvent::query()
-            ->with('user')
-            ->latest('occurred_at')
-            ->limit(8)
-            ->get()
-            ->map(function (AnalyticsEvent $event) use ($labels) {
-                $actor  = $event->user->name ?? 'A user';
-                $detail = $event->metadata['detail'] ?? ($actor . ' · ' . str_replace('_', ' ', $event->event_type));
+        // Build the live feed from REAL activity so it always updates:
+        // recent enrollments, badge awards, and course completions — merged
+        // with any recorded analytics events, newest first.
+        $feed = collect();
 
-                return [
-                    'title'  => $labels[$event->event_type] ?? ucfirst(str_replace('_', ' ', $event->event_type)),
-                    'detail' => $detail,
-                    'time'   => $event->occurred_at?->diffForHumans() ?? '',
-                ];
-            })
-            ->values()
+        Enrollment::with(['user', 'course'])->latest()->limit(6)->get()
+            ->each(fn ($e) => $feed->push([
+                'title' => 'New student enrolled',
+                'detail'=> ($e->user->name ?? 'A student') . ' · ' . ($e->course->title ?? 'a course'),
+                'time'  => ($e->enrolled_at ?? $e->created_at)?->diffForHumans() ?? '',
+                'ts'    => ($e->enrolled_at ?? $e->created_at)?->getTimestamp() ?? 0,
+            ]));
+
+        UserBadge::with(['user', 'badge'])->latest('earned_at')->limit(6)->get()
+            ->each(fn ($ub) => $feed->push([
+                'title' => 'Badge issued',
+                'detail'=> ($ub->user->name ?? 'A student') . ' earned the ' . ($ub->badge->name ?? 'Badge') . ' badge',
+                'time'  => $ub->earned_at?->diffForHumans() ?? '',
+                'ts'    => $ub->earned_at?->getTimestamp() ?? 0,
+            ]));
+
+        Enrollment::with(['user', 'course'])->where('is_completed', true)
+            ->latest('updated_at')->limit(4)->get()
+            ->each(fn ($e) => $feed->push([
+                'title' => 'Course completed',
+                'detail'=> ($e->user->name ?? 'A student') . ' completed ' . ($e->course->title ?? 'a course'),
+                'time'  => $e->updated_at?->diffForHumans() ?? '',
+                'ts'    => $e->updated_at?->getTimestamp() ?? 0,
+            ]));
+
+        AnalyticsEvent::query()->with('user')->latest('occurred_at')->limit(6)->get()
+            ->each(function (AnalyticsEvent $event) use ($labels, $feed) {
+                $actor = $event->user->name ?? 'A user';
+                $feed->push([
+                    'title' => $labels[$event->event_type] ?? ucfirst(str_replace('_', ' ', $event->event_type)),
+                    'detail'=> $event->metadata['detail'] ?? ($actor . ' · ' . str_replace('_', ' ', $event->event_type)),
+                    'time'  => $event->occurred_at?->diffForHumans() ?? '',
+                    'ts'    => $event->occurred_at?->getTimestamp() ?? 0,
+                ]);
+            });
+
+        $activity = $feed->sortByDesc('ts')->take(8)->values()
+            ->map(fn ($row) => ['title' => $row['title'], 'detail' => $row['detail'], 'time' => $row['time']])
             ->all();
-
-        // Fall back to real recent enrollments when no analytics events have
-        // been recorded yet — the feed should always show live activity.
-        if (count($activity) === 0) {
-            $activity = Enrollment::with(['user', 'course'])
-                ->latest()
-                ->limit(8)
-                ->get()
-                ->map(fn ($e) => [
-                    'title'  => 'New student enrolled',
-                    'detail' => ($e->user->name ?? 'A student') . ' · ' . ($e->course->title ?? 'a course'),
-                    'time'   => $e->created_at?->diffForHumans() ?? '',
-                ])
-                ->values()
-                ->all();
-        }
 
         // Same zero-inclusive badge counters the dashboard renders, so the
         // 15-second polling can refresh the Recent Badges panel live.

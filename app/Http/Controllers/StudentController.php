@@ -304,10 +304,21 @@ class StudentController extends Controller
         $auth   = Auth::user();
         $course = Course::findOrFail($id);
 
-        Enrollment::firstOrCreate(
+        $enrollment = Enrollment::firstOrCreate(
             ['user_id' => $auth->id, 'course_id' => $course->id],
             ['enrolled_at' => now(), 'progress_percent' => 0, 'is_completed' => false]
         );
+
+        if ($enrollment->wasRecentlyCreated) {
+            AnalyticsEvent::create([
+                'user_id'     => $auth->id,
+                'event_type'  => 'enrollment',
+                'entity_type' => 'course',
+                'entity_id'   => $course->id,
+                'metadata'    => ['detail' => $auth->name . ' enrolled in ' . $course->title],
+                'occurred_at' => now(),
+            ]);
+        }
 
         $course->enrolled_count = $course->enrollments()->count();
         $course->save();
@@ -509,6 +520,10 @@ class StudentController extends Controller
             if (! $lesson) {
                 continue;
             }
+            $alreadyDone = DB::table('lesson_completions')
+                ->where('user_id', $auth->id)
+                ->where('lesson_id', $lesson->id)
+                ->exists();
             DB::table('lesson_completions')->insertOrIgnore([
                 'user_id'      => $auth->id,
                 'lesson_id'    => $lesson->id,
@@ -516,6 +531,17 @@ class StudentController extends Controller
                 'created_at'   => now(),
                 'updated_at'   => now(),
             ]);
+            // Feed the Live Monitoring stream (only once per lesson).
+            if (! $alreadyDone) {
+                AnalyticsEvent::create([
+                    'user_id'     => $auth->id,
+                    'event_type'  => 'lesson_completed',
+                    'entity_type' => 'lesson',
+                    'entity_id'   => $lesson->id,
+                    'metadata'    => ['detail' => $auth->name . ' finished ' . ($lesson->title ?? 'a lesson')],
+                    'occurred_at' => now(),
+                ]);
+            }
         }
 
         // Record quiz attempts server-side and enforce the 24-hour retake
@@ -554,6 +580,18 @@ class StudentController extends Controller
                 'started_at'   => now(),
                 'submitted_at' => now(),
             ]);
+
+            // Feed the Live Monitoring stream.
+            if ($pct >= (int) $quiz->passing_score) {
+                AnalyticsEvent::create([
+                    'user_id'     => $auth->id,
+                    'event_type'  => 'quiz_passed',
+                    'entity_type' => 'quiz',
+                    'entity_id'   => $quiz->id,
+                    'metadata'    => ['detail' => $auth->name . ' passed ' . ($quiz->title ?? 'a quiz') . ' (' . $pct . '%)'],
+                    'occurred_at' => now(),
+                ]);
+            }
 
             if ($pct < (int) $quiz->passing_score) {
                 $quizUnlocks[(string) $modIdx] = now()->addHours(24)->getTimestamp() * 1000;
